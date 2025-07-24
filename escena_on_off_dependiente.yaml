@@ -1,0 +1,113 @@
+blueprint:
+  name: Escena ON/OFF dependiente por sensor
+  description: >
+    Automatización combinada que activa dispositivos cuando hay presencia y los apaga tras ausencia,
+    solo si antes se encendieron. Usa un input_boolean como control de estado.
+  domain: automation
+  input:
+    sensor_presencia:
+      name: Sensor de presencia
+      selector:
+        entity:
+          domain: sensor
+    valor_encendido:
+      name: Valor de encendido del sensor
+      default: "1.0"
+    valor_apagado:
+      name: Valor de apagado del sensor
+      default: "0.0"
+    delay_encendido:
+      name: Retardo para activar (segundos)
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: s
+          mode: slider
+    delay_apagado:
+      name: Retardo para apagar (minutos)
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: min
+          mode: slider
+    luz:
+      name: Luz a controlar
+      selector:
+        entity:
+          domain: light
+    clima:
+      name: Climatizador a controlar
+      selector:
+        entity:
+          domain: climate
+    variable_estado:
+      name: Variable de control (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+
+trigger:
+  - platform: state
+    entity_id: !input sensor_presencia
+    from: !input valor_apagado
+    to: !input valor_encendido
+    for:
+      seconds: !input delay_encendido
+    id: encender
+  - platform: state
+    entity_id: !input sensor_presencia
+    from: !input valor_encendido
+    to: !input valor_apagado
+    for:
+      minutes: !input delay_apagado
+    id: apagar
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: encender
+          - condition: state
+            entity_id: !input variable_estado
+            state: "off"
+        sequence:
+          - service: input_boolean.turn_on
+            target:
+              entity_id: !input variable_estado
+          - service: light.turn_on
+            target:
+              entity_id: !input luz
+          - delay:
+              seconds: 4
+          - service: climate.turn_on
+            target:
+              entity_id: !input clima
+          - delay:
+              seconds: 2
+      - conditions:
+          - condition: trigger
+            id: apagar
+          - condition: state
+            entity_id: !input variable_estado
+            state: "on"
+        sequence:
+          - service: input_boolean.turn_off
+            target:
+              entity_id: !input variable_estado
+          - service: light.turn_off
+            target:
+              entity_id: !input luz
+          - delay:
+              seconds: 2
+          - service: climate.turn_off
+            target:
+              entity_id: !input clima
+          - delay:
+              seconds: 2
+mode: single
