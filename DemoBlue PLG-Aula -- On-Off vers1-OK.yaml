@@ -1,190 +1,130 @@
-blueprint:
-  name: Control de Ocupación - Aula
-  description: Automatización para controlar luces, climatización y estados de ocupación basados en sensores y switches.
-  domain: automation
-  input:
-    sensores_movimiento:
-      name: Sensores de movimiento
-      selector:
-        entity:
-          domain: sensor
-          multiple: true
-
-    switch_disparador:
-      name: Switch para escaneo
-      selector:
-        entity:
-          domain: switch
-
-    luces_controladas:
-      name: Luces para controlar
-      selector:
-        entity:
-          domain: light
-          multiple: true
-
-    termostatos:
-      name: Termostatos a controlar
-      selector:
-        entity:
-          domain: climate
-          multiple: true
-
-    estado_interno:
-      name: Input Select - Estado Interno
-      selector:
-        entity:
-          domain: input_select
-
-    estado_plugin:
-      name: Input Select - Estado Plugin
-      selector:
-        entity:
-          domain: input_select
-
-trigger:
-  - platform: state
-    entity_id: !input sensores_movimiento
-    from: "0.0"
-    to: "1.0"
-    for:
-      seconds: 1
-    id: encender
-
-  - platform: state
-    entity_id: !input sensores_movimiento
-    from: "1.0"
-    to: "0.0"
-    for:
-      seconds: 0
-    id: scaner
-
-  - platform: state
-    entity_id: !input sensores_movimiento
-    from: "1.0"
-    to: "0.0"
-    for:
-      minutes: 2
-    id: apagar
-
-  - platform: state
-    entity_id: !input switch_disparador
-    from: "off"
-    to: "on"
-    for:
-      seconds: 10
-    id: scaner
-
-condition: []
-
-action:
-  - choose:
-      - conditions:
-          - condition: trigger
-            id: encender
-          - condition: state
-            entity_id: !input estado_interno
-            state: "libre"
-        sequence:
-          - service: input_select.select_option
-            data:
-              option: "ocupado"
-            target:
-              entity_id:
-                - !input estado_interno
-                - !input estado_plugin
-
-          - repeat:
-              for_each: !input luces_controladas
-              sequence:
-                - service: light.turn_on
-                  target:
-                    entity_id: "{{ repeat.item }}"
-
-          - repeat:
-              for_each: !input termostatos
-              sequence:
-                - service: climate.turn_on
-                  target:
-                    entity_id: "{{ repeat.item }}"
-
-                - service: climate.set_temperature
-                  data:
-                    temperature: 24
-                    hvac_mode: cool
-                  target:
-                    entity_id: "{{ repeat.item }}"
-
-                - service: climate.set_fan_mode
-                  data:
-                    fan_mode: "Auto low"
-                  target:
-                    entity_id: "{{ repeat.item }}"
-
-      - conditions:
-          - condition: trigger
-            id: scaner
-          - condition: state
-            entity_id: !input estado_interno
-            state: "ocupado"
-        sequence:
-          - service: input_select.select_option
-            data:
-              option: "scan"
-            target:
-              entity_id: !input estado_interno
-
-      - conditions:
-          - condition: trigger
-            id: encender
-          - condition: state
-            entity_id: !input estado_interno
-            state: "scan"
-        sequence:
-          - service: input_select.select_option
-            data:
-              option: "ocupado"
-            target:
-              entity_id: !input estado_interno
-
-      - conditions:
-          - condition: trigger
-            id: apagar
-          - condition: state
-            entity_id: !input estado_interno
-            state: "scan"
-        sequence:
-          - service: input_select.select_option
-            data:
-              option: "libre"
-            target:
-              entity_id:
-                - !input estado_interno
-                - !input estado_plugin
-
-          - repeat:
-              for_each: !input luces_controladas
-              sequence:
-                - service: light.turn_off
-                  target:
-                    entity_id: "{{ repeat.item }}"
-
-          - repeat:
-              for_each: !input termostatos
-              sequence:
-                - service: climate.turn_off
-                  target:
-                    entity_id: "{{ repeat.item }}"
-
-      - conditions:
-          - condition: trigger
-            id: scaner
-          - condition: state
-            entity_id: !input estado_plugin
-            state: "libre"
-        sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: !input switch_disparador
-
+alias: Demo PLG-Aula - ON/OFF
+description: Control de ocupación basado en sensor de presencia
+triggers:
+- entity_id: sensor.9_in_1_multi_sensor_general_purpose
+  from: "0.0"
+  to: "1.0"
+  for:
+    seconds: 1
+  id: encender
+  trigger: state
+- entity_id: sensor.9_in_1_multi_sensor_general_purpose
+  from: "1.0"
+  to: "0.0"
+  for:
+    seconds: 0
+  id: scaner
+  trigger: state
+- entity_id:
+  - sensor.9_in_1_multi_sensor_general_purpose
+  from: "1.0"
+  to: "0.0"
+  for:
+    hours: 0
+    minutes: 5
+    seconds: 0
+  id: apagar
+  trigger: state
+- entity_id: input_select.EstadosInternos
+  from: libre
+  to: ocupado
+  trigger: state
+- entity_id:
+  - input_select.EstadosInternos
+  to: scan
+  trigger: state
+  from: ocupado
+- entity_id: input_select.EstadosInternos
+  from: scan
+  to: libre
+  trigger: state
+- entity_id: input_select.estadoplugin
+  from: libre
+  to: ocupado
+  trigger: state
+- entity_id: input_select.estadoplugin
+  from: ocupado
+  to: libre
+  trigger: state
+actions:
+- choose:
+  - conditions:
+    - condition: trigger
+      id: encender
+    - condition: state
+      entity_id: input_select.EstadosInternos
+      state: libre
+    sequence:
+    - data:
+        option: ocupado
+      target:
+        entity_id:
+        - input_select.EstadosInternos
+        - input_select.estadoplugin
+      action: input_select.select_option
+    - target:
+        entity_id: light.sw1_basic
+      action: light.turn_on
+      data: {}
+    - target:
+        entity_id: climate.node_4
+      action: climate.turn_on
+      data: {}
+    - data:
+        temperature: 24
+        hvac_mode: cool
+      target:
+        entity_id: climate.node_4
+      action: climate.set_temperature
+    - data:
+        fan_mode: Auto low
+      target:
+        entity_id: climate.node_4
+      action: climate.set_fan_mode
+  - conditions:
+    - condition: trigger
+      id: scaner
+    - condition: state
+      entity_id: input_select.EstadosInternos
+      state: ocupado
+    sequence:
+    - data:
+        option: scan
+      action: input_select.select_option
+      target:
+        entity_id: input_select.estadosinternos
+  - conditions:
+    - condition: trigger
+      id: encender
+    - condition: state
+      entity_id: input_select.EstadosInternos
+      state: scan
+    sequence:
+    - data:
+        option: ocupado
+      action: input_select.select_option
+      target:
+        entity_id: input_select.estadosinternos
+  - conditions:
+    - condition: trigger
+      id: apagar
+    - condition: state
+      entity_id: input_select.estadosinternos
+      state: scan
+    sequence:
+    - data:
+        option: libre
+      target:
+        entity_id:
+        - input_select.EstadosInternos
+        - input_select.estadoplugin
+      action: input_select.select_option
+    - target:
+        entity_id: light.sw1_basic
+      action: light.turn_off
+      data: {}
+    - target:
+        entity_id: climate.node_4
+      action: climate.turn_off
+      data: {}
 mode: single
