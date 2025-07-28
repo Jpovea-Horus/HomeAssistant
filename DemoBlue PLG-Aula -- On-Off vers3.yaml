@@ -1,0 +1,98 @@
+blueprint:
+  name: Configure plugin Aula Inteligente
+  description: "Automatización avanzada para control de aula inteligente con sensores, switches y termostato."
+  domain: automation
+  input:
+    input_estados_internos:
+      name: Input Select - Estado Interno
+      description: Selecciona el input_select que representa el estado interno del plugin.
+      selector:
+        entity:
+          domain: input_select
+
+    input_estado_plugin:
+      name: Input Select - Estado Plugin
+      description: Selecciona el input_select que representa el estado externo del plugin.
+      selector:
+        entity:
+          domain: input_select
+
+    tiempo_retardo_apagado:
+      name: Tiempo de retardo para apagado total (segundos)
+      description: Tiempo en segundos que debe pasar antes de apagar todos los dispositivos.
+      default: 300
+      selector:
+        number:
+          min: 10
+          max: 3600
+          unit_of_measurement: seconds
+          mode: slider
+
+    sensores_movimiento:
+      name: Sensor de movimiento principal
+      description: ItemId del sensor de movimiento principal.
+      selector:
+        entity:
+          domain: binary_sensor
+
+    actuadores_encendido:
+      name: ItemId de dispositivos a encender
+      description: Lista de switches a encender al detectar ocupación.
+      selector:
+        target:
+          entity:
+            domain: switch
+
+    actuadores_apagado:
+      name: ItemId de dispositivos a apagar
+      description: Lista de switches a apagar al liberar ocupación.
+      selector:
+        target:
+          entity:
+            domain: switch
+
+    actuador_master_switch:
+      name: ItemId de Master Switch
+      description: Dispositivo maestro para controlar todos los switches principales.
+      selector:
+        entity:
+          domain: switch
+
+    termostato:
+      name: DeviceId del termostato
+      description: Selecciona el termostato a controlar.
+      selector:
+        entity:
+          domain: climate
+
+    setpoint_termostato:
+      name: SetPoint ON del termostato
+      description: Temperatura objetivo al encender el termostato.
+      default: 23
+      selector:
+        number:
+          min: 16
+          max: 30
+          unit_of_measurement: °C
+          mode: slider
+
+    habilitar_termostato:
+      name: Modo Encendido Termostato
+      description: Desea habilitar el uso del termostato?
+      default: false
+      selector:
+        boolean: {}
+
+    habilitar_luces:
+      name: Modo Disparador Luces
+      description: Habilita encendido de luces por movimiento o switches
+      default: true
+      selector:
+        boolean: {}
+
+    habilitar_master_switch:
+      name: Modo Disparador Master Switch
+      description: Desea usar el master switch con los disparadores?
+      default: false
+      selector:
+        boolean: {}
