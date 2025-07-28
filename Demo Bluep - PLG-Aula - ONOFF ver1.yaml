@@ -1,0 +1,251 @@
+blueprint:
+  name: Configure plugin Aula Inteligente
+  description: "Automatización avanzada para control de aula inteligente con sensores, switches y termostato."
+  domain: automation
+
+  input:
+    input_estados_internos:
+      name: Input Select - Estado Interno
+      description: Selecciona el input_select que representa el estado interno del plugin.
+      selector:
+        entity:
+          domain: input_select
+
+    input_estado_plugin:
+      name: Input Select - Estado Plugin
+      description: Selecciona el input_select que representa el estado externo del plugin.
+      selector:
+        entity:
+          domain: input_select
+
+    tiempo_retardo_apagado:
+      name: Tiempo de retardo para apagado total (segundos)
+      description: Tiempo en segundos que debe pasar antes de apagar todos los dispositivos.
+      default: 300
+      selector:
+        number:
+          min: 1
+          max: 1800
+          unit_of_measurement: seconds
+          mode: slider
+
+    sensor_presencia:
+      name: Sensor de presencia
+      selector:
+        entity:
+          domain: sensor
+    valor_encendido:
+      name: Valor de activación del sensor
+      default: "1.0"
+    valor_apagado:
+      name: Valor de apagado del sensor
+      default: "0.0"
+      multiple: true
+
+    actuadores_encendido:
+      name: ItemId de dispositivos a encender
+      description: Lista de switches a encender al detectar ocupación.
+      selector:
+        target:
+          entity:
+            domain: light
+          multiple: true
+
+    actuadores_apagado:
+      name: ItemId de dispositivos a apagar
+      description: Lista de switches a apagar al liberar ocupación.
+      selector:
+        target:
+          entity:
+            domain: light
+          multiple: true
+
+    termostato:
+      name: DeviceId del termostato
+      description: Selecciona el termostato a controlar.
+      selector:
+        entity:
+          domain: climate
+        multiple: true
+
+    setpoint_termostato:
+      name: SetPoint ON del termostato
+      description: Temperatura objetivo al encender el termostato.
+      default: 23
+      selector:
+        number:
+          min: 16
+          max: 30
+          unit_of_measurement: °C
+          mode: slider
+
+    habilitar_termostato:
+      name: Modo Encendido Termostato
+      description: Desea habilitar el uso del termostato?
+      default: false
+      selector:
+        boolean: {}
+
+    habilitar_luces:
+      name: Modo Disparador Luces
+      description: Habilita encendido de luces por movimiento o switches
+      default: true
+      selector:
+        boolean: {}
+
+    habilitar_master_switch:
+      name: Modo Disparador Master Switch
+      description: Desea usar el master switch con los disparadores?
+      default: false
+      selector:
+        boolean: {}
+
+alias: Demo PLG-Aula - ON/OFF
+description: Control de ocupación basado en sensor de presencia
+mode: single
+
+trigger:
+- platform: state
+  entity_id: !input sensor_presencia
+  from: !input valor_apagado
+  to: !input valor_encendido
+  for:
+    seconds: 1
+  id: encender
+
+- platform: state
+  entity_id: !input sensor_presencia
+  from: !input valor_encendido
+  to: !input valor_apagado
+  for:
+    seconds: 0
+  id: scaner
+
+- platform: state
+  entity_id: !input sensor_presencia
+  from: !input valor_encendido
+  to: !input valor_apagado
+  for:
+    seconds: !input tiempo_retardo_apagado
+  id: apagar
+
+- platform: state
+  entity_id: !input input_estados_internos
+  from: libre
+  to: ocupado
+
+- platform: state
+  entity_id: !input input_estados_internos
+  from: ocupado
+  to: scan
+
+- platform: state
+  entity_id: !input input_estados_internos
+  from: scan
+  to: libre
+
+- platform: state
+  entity_id: !input input_estado_plugin
+  from: libre
+  to: ocupado
+
+- platform: state
+  entity_id: !input input_estado_plugin
+  from: ocupado
+  to: libre
+
+condition: []
+action:
+- choose:
+  - conditions:
+    - condition: trigger
+      id: encender
+    - condition: state
+      entity_id: !input input_estados_internos
+      state: libre
+    sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: !input input_estados_internos
+      data:
+        option: ocupado
+    - service: input_select.select_option
+      target:
+        entity_id: !input input_estado_plugin
+      data:
+        option: ocupado
+    - if:
+      - condition: template
+        value_template: "{{ is_state('input_boolean.habilitar_luces', 'on') }}"
+      then:
+      - service: light.turn_on
+        target: !input actuadores_encendido
+    - if:
+      - condition: template
+        value_template: "{{ is_state('input_boolean.habilitar_termostato', 'on') }}"
+      then:
+      - service: climate.turn_on
+        target:
+          entity_id: !input termostato
+      - service: climate.set_temperature
+        target:
+          entity_id: !input termostato
+        data:
+          temperature: !input setpoint_termostato
+
+  - conditions:
+    - condition: trigger
+      id: scaner
+    - condition: state
+      entity_id: !input input_estados_internos
+      state: ocupado
+    sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: !input input_estados_internos
+      data:
+        option: scan
+
+  - conditions:
+    - condition: trigger
+      id: encender
+    - condition: state
+      entity_id: !input input_estados_internos
+      state: scan
+    sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: !input input_estados_internos
+      data:
+        option: ocupado
+
+  - conditions:
+    - condition: trigger
+      id: apagar
+    - condition: state
+      entity_id: !input input_estados_internos
+      state: scan
+    sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: !input input_estados_internos
+      data:
+        option: libre
+    - service: input_select.select_option
+      target:
+        entity_id: !input input_estado_plugin
+      data:
+        option: libre
+    - if:
+      - condition: template
+        value_template: "{{ is_state('input_boolean.habilitar_luces', 'on') }}"
+      then:
+      - service: light.turn_off
+        target: !input actuadores_apagado
+    - if:
+      - condition: template
+        value_template: "{{ is_state('input_boolean.habilitar_termostato', 'on') }}"
+      then:
+      - service: climate.turn_off
+        target:
+          entity_id: !input termostato
