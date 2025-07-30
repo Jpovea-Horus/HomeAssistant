@@ -1,0 +1,235 @@
+blueprint:
+  name: Plugin Ocupación - Control Unificado
+  description: >
+    Controla el comportamiento de ocupación para una habitación o zona,  manejando sensores de movimiento, luces, climatización y estados lógicos.
+  domain: automation
+  input:
+    sensor_movimiento:
+      name: Sensor de Movimiento
+      selector:
+        entity:
+          domain: switch
+    switches_luces:
+      name: Interruptores de luces
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    interruptor_termostato:
+      name: Switch Termostato
+      selector:
+        entity:
+          domain: switch
+    estadoplugin:
+      name: Input Select - Estado Plugin
+      selector:
+        entity:
+          domain: input_select
+    estadosinternos:
+      name: Input Select - Estados Internos
+      selector:
+        entity:
+          domain: input_select
+    modoplugin:
+      name: Input Select - Modo Plugin
+      selector:
+        entity:
+          domain: input_select
+    modo_termostato:
+      name: Input Select - Modo Encendido Termostato
+      selector:
+        entity:
+          domain: input_select
+    modo_act_on:
+      name: Input Select - Modo Disparador Luces
+      selector:
+        entity:
+          domain: input_select
+
+trigger:
+- platform: state
+  entity_id: !input estadoplugin
+  from: "ocupado"
+  to: "libre"
+  id: plugin_libre
+
+- platform: state
+  entity_id: !input sensor_movimiento
+  from: "off"
+  to: "on"
+  id: encender
+
+- platform: state
+  entity_id: !input sensor_movimiento
+  from: "on"
+  to: "off"
+  for:
+    seconds: 0
+  id: scaner
+
+- platform: state
+  entity_id: !input sensor_movimiento
+  from: "on"
+  to: "off"
+  for:
+    minutes: 1
+  id: apagar
+
+- platform: state
+  entity_id: !input estadosinternos
+  from: "libre"
+  to: "ocupado"
+  id: libre_ocupado
+
+- platform: state
+  entity_id: !input estadosinternos
+  from: "ocupado"
+  to: "scan"
+  id: ocupado_scan
+
+- platform: state
+  entity_id: !input estadosinternos
+  from: "scan"
+  to: "libre"
+  id: scan_libre
+
+- platform: state
+  entity_id: !input estadoplugin
+  from: "libre"
+  to: "ocupado"
+  id: plugin_ocupado
+
+- platform: state
+  entity_id: !input estadoplugin
+  from: "ocupado"
+  to: "libre"
+  id: plugin_libre_2
+
+- platform: state
+  entity_id: !input switches_luces
+  from: "off"
+  to: "on"
+  for:
+    seconds: 20
+  id: onSwitchDelay
+
+condition: []
+
+action:
+- choose:
+  - conditions:
+    - condition: trigger
+      id: encender
+    - condition: state
+      entity_id: !input estadosinternos
+      state: "libre"
+    sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: !input estadosinternos
+      data:
+        option: "ocupado"
+    - service: input_select.select_option
+      target:
+        entity_id: !input estadoplugin
+      data:
+        option: "ocupado"
+    - condition: state
+      entity_id: !input modoplugin
+      state: "Auto"
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: !input modo_act_on
+          state: "on"
+        sequence:
+        - service: switch.turn_on
+          target:
+            entity_id: !input switches_luces
+      - conditions:
+        - condition: state
+          entity_id: !input modo_termostato
+          state: "on"
+        sequence:
+        - service: switch.turn_on
+          target:
+            entity_id: !input interruptor_termostato
+
+  - conditions:
+    - condition: trigger
+      id: scaner
+    - condition: state
+      entity_id: !input estadosinternos
+      state: "ocupado"
+    sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: !input estadosinternos
+      data:
+        option: "scan"
+
+  - conditions:
+    - condition: trigger
+      id: encender
+    - condition: state
+      entity_id: !input estadosinternos
+      state: "scan"
+    sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: !input estadosinternos
+      data:
+        option: "ocupado"
+
+  - conditions:
+    - condition: trigger
+      id: apagar
+    - condition: state
+      entity_id: !input estadosinternos
+      state: "scan"
+    sequence:
+    - service: input_select.select_option
+      target:
+        entity_id: !input estadosinternos
+      data:
+        option: "libre"
+    - service: input_select.select_option
+      target:
+        entity_id: !input estadoplugin
+      data:
+        option: "libre"
+    - condition: state
+      entity_id: !input modoplugin
+      state: "Auto"
+    - service: switch.turn_off
+      target:
+        entity_id: !input switches_luces
+    - service: switch.turn_off
+      target:
+        entity_id: !input interruptor_termostato
+
+  - conditions:
+    - condition: trigger
+      id: plugin_libre
+    sequence:
+    - condition: state
+      entity_id: !input modoplugin
+      state: "Auto"
+    - service: switch.turn_off
+      target:
+        entity_id: !input switches_luces
+    - service: switch.turn_off
+      target:
+        entity_id: !input interruptor_termostato
+    - service: input_select.select_option
+      target:
+        entity_id: !input estadosinternos
+      data:
+        option: "libre"
+    - service: input_select.select_option
+      target:
+        entity_id: !input estadoplugin
+      data:
+        option: "libre"
+
+  default: []
