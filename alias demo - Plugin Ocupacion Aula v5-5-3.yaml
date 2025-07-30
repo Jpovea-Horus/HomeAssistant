@@ -1,0 +1,221 @@
+blueprint:
+  name: Plugin Ocupación MultiSensor - Control de Equipos
+  description: >
+    Controla el comportamiento de luces y termostato según estados de ocupación, sensores y configuración personalizada.
+  domain: automation
+  input:
+    estado_plugin:
+      name: Estado del Plugin
+      selector:
+        entity:
+          domain: input_select
+    estado_ocupacion:
+      name: Estado de Ocupación
+      selector:
+        entity:
+          domain: input_select
+    modo_plugin:
+      name: Modo de Plugin
+      selector:
+        entity:
+          domain: input_select
+    modo_luces:
+      name: Habilitar luces por sensor
+      selector:
+        entity:
+          domain: input_boolean
+    modo_termostato:
+      name: Habilitar encendido de termostato
+      selector:
+        entity:
+          domain: input_boolean
+    sensor_movimiento:
+      name: Sensor de movimiento
+      selector:
+        entity:
+          domain: switch
+    control_luces:
+      name: Luces a controlar
+      selector:
+        target:
+          entity:
+            domain: switch
+    control_termostato:
+      name: Termostato
+      selector:
+        entity:
+          domain: climate
+    actuadores_on:
+      name: Actuadores (opcionales)
+      selector:
+        entity:
+          domain: switch
+
+trigger:
+  - platform: state
+    entity_id: !input estado_plugin
+    from: "ocupado"
+    to: "libre"
+    id: plugin_libre
+
+  - platform: state
+    entity_id: !input estado_plugin
+    from: "libre"
+    to: "ocupado"
+    id: plugin_ocupado
+
+  - platform: state
+    entity_id: !input sensor_movimiento
+    from: "off"
+    to: "on"
+    id: encender
+
+  - platform: state
+    entity_id: !input sensor_movimiento
+    from: "on"
+    to: "off"
+    for:
+      seconds: 0
+    id: scaner
+
+  - platform: state
+    entity_id: !input sensor_movimiento
+    from: "on"
+    to: "off"
+    for:
+      minutes: 1
+    id: apagar
+
+  - platform: state
+    entity_id: !input estado_ocupacion
+    from: "libre"
+    to: "ocupado"
+    id: libre_ocupado
+
+  - platform: state
+    entity_id: !input estado_ocupacion
+    from: "ocupado"
+    to: "scan"
+    id: ocupado_scan
+
+  - platform: state
+    entity_id: !input estado_ocupacion
+    from: "scan"
+    to: "libre"
+    id: scan_libre
+
+# OPCIONAL (solo si se usa luego)
+#  - platform: state
+#    entity_id: !input actuadores_on
+#    from: "off"
+#    to: "on"
+#    for:
+#      seconds: 20
+#    id: onSwitchDelay
+
+condition: []
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: plugin_ocupado
+          - condition: state
+            entity_id: !input modo_plugin
+            state: "Auto"
+          - condition: state
+            entity_id: !input modo_termostato
+            state: "on"
+        sequence:
+          - service: climate.turn_on
+            target:
+              entity_id: !input control_termostato
+
+      - conditions:
+          - condition: trigger
+            id: encender
+          - condition: state
+            entity_id: !input modo_plugin
+            state: "Auto"
+          - condition: state
+            entity_id: !input modo_luces
+            state: "on"
+        sequence:
+          - service: switch.turn_on
+            target: !input control_luces
+
+      - conditions:
+          - condition: trigger
+            id: apagar
+          - condition: state
+            entity_id: !input modo_plugin
+            state: "Auto"
+        sequence:
+          - service: switch.turn_off
+            target: !input control_luces
+          - service: climate.turn_off
+            target:
+              entity_id: !input control_termostato
+
+      - conditions:
+          - condition: trigger
+            id: scaner
+          - condition: state
+            entity_id: !input modo_plugin
+            state: "Auto"
+        sequence:
+          - service: input_select.select_option
+            data:
+              entity_id: !input estado_ocupacion
+              option: "scan"
+
+      - conditions:
+          - condition: trigger
+            id: libre_ocupado
+          - condition: state
+            entity_id: !input modo_plugin
+            state: "Auto"
+        sequence:
+          - service: input_select.select_option
+            data:
+              entity_id: !input estado_ocupacion
+              option: "ocupado"
+
+      - conditions:
+          - condition: trigger
+            id: ocupado_scan
+          - condition: state
+            entity_id: !input modo_plugin
+            state: "Auto"
+        sequence:
+          - service: input_select.select_option
+            data:
+              entity_id: !input estado_ocupacion
+              option: "scan"
+
+      - conditions:
+          - condition: trigger
+            id: scan_libre
+          - condition: state
+            entity_id: !input modo_plugin
+            state: "Auto"
+        sequence:
+          - service: input_select.select_option
+            data:
+              entity_id: !input estado_ocupacion
+              option: "libre"
+
+      - conditions:
+          - condition: trigger
+            id: plugin_libre
+          - condition: state
+            entity_id: !input modo_plugin
+            state: "Auto"
+        sequence:
+          - service: switch.turn_off
+            target: !input control_luces
+          - service: climate.turn_off
+            target:
+              entity_id: !input control_termostato
+
+mode: single
