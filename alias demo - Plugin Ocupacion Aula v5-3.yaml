@@ -1,0 +1,159 @@
+blueprint:
+  name: Configure plugin Aula Inteligente
+  description: >-
+    Blueprint que configura el comportamiento unificado de ocupación y control de equipos
+    basado en sensores de movimiento, estados internos y condiciones de tiempo.
+  domain: automation
+  input:
+    tiempo_scan:
+      name: Tiempo Sensor de Scanner
+      description: Tiempo estimado de escáner después de la desactivación del Sensor de Movimiento
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+    sensor_mov:
+      name: Sensor de Movimiento Principal
+      description: Registra el itemId del sensor de movimiento principal
+      selector:
+        entity:
+          domain: switch
+    actuadores_on:
+      name: Actuadores ON
+      description: Dispositivos que encienden al pasar de libre a ocupado
+      selector:
+        target:
+          entity:
+            domain: switch
+    actuadores_off:
+      name: Actuadores OFF
+      description: Dispositivos que se apagan al pasar de scan a libre
+      selector:
+        target:
+          entity:
+            domain: switch
+    termostato:
+      name: Termostato
+      description: DeviceId del termostato para control de temperatura
+      selector:
+        entity:
+          domain: climate
+    setpoint_on:
+      name: SetPoint ON del termostato
+      description: Temperatura a establecer al pasar de libre a ocupado
+      default: 24
+      selector:
+        number:
+          min: 16
+          max: 30
+          unit_of_measurement: °C
+    estado_plugin:
+      name: Estado Plugin
+      description: Auxiliar de estado del plugin
+      selector:
+        entity:
+          domain: input_select
+    estado_ocupacion:
+      name: Estado Ocupacion
+      description: Auxiliar de estado de ocupación
+      selector:
+        entity:
+          domain: input_select
+    modo_plugin:
+      name: Modo Plugin
+      description: Define si el plugin está en Auto o Apagado
+      selector:
+        entity:
+          domain: input_select
+    modo_encendido_termostato:
+      name: Modo Encendido Termostato
+      description: Registra (si/no) desea habilitar el termostato (no por defecto)
+      selector:
+        entity:
+          domain: input_boolean
+    modo_disparador_luces:
+      name: Modo Disparador Luces
+      description: Registra (si/no) desea habilitar las luces por disparo de Movimiento o Actuadores (no por defecto)
+      selector:
+        entity:
+          domain: input_boolean
+
+trigger:
+  - platform: state
+    entity_id: !input sensor_mov
+    from: 'off'
+    to: 'on'
+    id: encender
+
+  - platform: state
+    entity_id: !input sensor_mov
+    from: 'on'
+    to: 'off'
+    for:
+      minutes: !input tiempo_scan
+    id: apagar
+
+condition: []
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: encender
+          - condition: template
+            value_template: >-
+              {{ is_state(input.estado_ocupacion, 'libre') and
+                 is_state(input.modo_plugin, 'Auto') and
+                 (is_state(input.modo_disparador_luces, 'on')) }}
+        sequence:
+          - service: input_select.select_option
+            data:
+              option: ocupado
+            target:
+              entity_id:
+                - !input estado_ocupacion
+                - !input estado_plugin
+          - service: switch.turn_on
+            target: !input actuadores_on
+          - condition: state
+            entity_id: !input modo_encendido_termostato
+            state: 'on'
+          - service: climate.turn_on
+            target:
+              entity_id: !input termostato
+          - service: climate.set_temperature
+            data:
+              temperature: !input setpoint_on
+              hvac_mode: cool
+            target:
+              entity_id: !input termostato
+          - service: climate.set_fan_mode
+            data:
+              fan_mode: "Auto low"
+            target:
+              entity_id: !input termostato
+
+      - conditions:
+          - condition: trigger
+            id: apagar
+          - condition: template
+            value_template: >-
+              {{ is_state(input.estado_ocupacion, 'scan') and is_state(input.modo_plugin, 'Auto') }}
+        sequence:
+          - service: input_select.select_option
+            data:
+              option: libre
+            target:
+              entity_id:
+                - !input estado_ocupacion
+                - !input estado_plugin
+          - service: switch.turn_off
+            target: !input actuadores_off
+          - condition: state
+            entity_id: !input modo_encendido_termostato
+            state: 'on'
+          - service: climate.turn_off
+            target:
+              entity_id: !input termostato
+mode: single
