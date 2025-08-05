@@ -44,7 +44,7 @@ blueprint:
     # Selección del input_select para el modo del plugin
     mode_plugin:
       name: Modo del Plugin
-      description: Input Select para el modo del plugin (Auto/Manual)
+      description: Input Select para el modo del plugin (auto/Manual)
       selector:
         entity:
           domain: input_select
@@ -81,7 +81,6 @@ blueprint:
         select:
           options:
             - Auto low
-            - Auto high
             - Low
             - Medium
             - High
@@ -188,10 +187,10 @@ action:
                 - !input state_plugin
             data:
               option: ocupado
-          # Verificar si el modo del plugin es Auto
+          # Verificar si el modo del plugin es auto
           - condition: state
             entity_id: !input mode_plugin
-            state: Auto
+            state: auto
           # Verificar si el modo de activación está encendido
           - condition: state
             entity_id: !input mode_activation
@@ -262,10 +261,10 @@ action:
                 - !input state_plugin
             data:
               option: libre
-          # Verificar si el modo del plugin es Auto
+          # Verificar si el modo del plugin es auto
           - condition: state
             entity_id: !input mode_plugin
-            state: Auto
+            state: auto
           # Apagar switches
           - service: switch.turn_off
             target:
@@ -283,10 +282,10 @@ action:
             entity_id: !input state_plugin
             state: libre
         sequence:
-          # Verificar si el modo del plugin es Auto
+          # Verificar si el modo del plugin es auto
           - condition: state
             entity_id: !input mode_plugin
-            state: Auto
+            state: auto
           # Apagar switches
           - service: switch.turn_off
             target:
@@ -315,10 +314,10 @@ action:
             entity_id: !input state_plugin
             state: libre
         sequence:
-          # Verificar si el modo del plugin es Auto
+          # Verificar si el modo del plugin es auto
           - condition: state
             entity_id: !input mode_plugin
-            state: Auto
+            state: auto
           # Apagar switches
           - service: switch.turn_off
             target:
@@ -338,4 +337,5 @@ action:
             target:
               entity_id: !input target_climates
         alias: Secuencia apagado por web
+
 mode: single
