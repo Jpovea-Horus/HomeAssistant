@@ -1,7 +1,7 @@
 # Blueprint para control unificado de ocupación y equipos en Home Assistant
 blueprint:
   name: Bp-Plugin Aula v1.1
-  description: Automatización para gestionar ocupación y controlar switches (On/Off) y termostatos en Home Assistant
+  description: Automatización para gestionar ocupación y Encender switches (On/Off) y termostatos en Home Assistant
   domain: automation
   input:
     # Selección de la entidad del sensor de movimiento
@@ -11,9 +11,9 @@ blueprint:
       selector:
         entity:
           domain: switch
-    # Selección de los switches a controlar
-    target_switches:
-      name: Switches a Controlar
+    # Selección de los switches a Encender
+    target_switchesOn:
+      name: Switches a Encender
       description: Lista de switches que se encenderán/apagarán según ocupación
       selector:
         entity:
@@ -27,9 +27,9 @@ blueprint:
         entity:
           domain: switch
           multiple: true
-    # Selección de los termostatos a controlar
+    # Selección de los termostatos a Encender
     target_climates:
-      name: Termostatos a Controlar
+      name: Termostatos a Encender
       description: Lista de termostatos que se configurarán según ocupación
       selector:
         entity:
@@ -139,7 +139,7 @@ trigger:
     id: apagar
   # Trigger cuando los switches se encienden por el tiempo especificado
   - platform: state
-    entity_id: !input target_switches
+    entity_id: !input target_switchesOn
     from: "off"
     to: "on"
     for:
@@ -206,7 +206,7 @@ action:
           # Encender switches
           - service: switch.turn_on
             target:
-              entity_id: !input target_switches
+              entity_id: !input target_switchesOn
           # Verificar si el modo termostato está encendido
           - condition: state
             entity_id: !input mode_thermostat
@@ -276,9 +276,10 @@ action:
           # Apagar switches
           - service: switch.turn_off
             target:
-              entity_id: 
-                - !input target_switches
-                - !input target_switchesOff
+              entity_id: !input target_switchesOn
+          - service: switch.turn_off
+            target:
+              entity_id: !input target_switchesOff
           # Apagar termostatos
           - service: climate.turn_off
             target:
@@ -299,7 +300,7 @@ action:
           # Apagar switches
           - service: switch.turn_off
             target:
-              entity_id: !input target_switches
+              entity_id: !input target_switchesOn
           # Cambiar estados a libre
           - service: input_select.select_option
             target:
@@ -331,7 +332,7 @@ action:
           # Apagar switches
           - service: switch.turn_off
             target:
-              entity_id: !input target_switches
+              entity_id: !input target_switchesOn
           # Retardo de 1 segundo
           - delay:
               seconds: 1
@@ -347,4 +348,5 @@ action:
             target:
               entity_id: !input target_climates
         alias: Secuencia apagado por web
+
 mode: single
