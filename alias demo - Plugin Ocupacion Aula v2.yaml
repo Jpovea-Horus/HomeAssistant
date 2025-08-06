@@ -340,13 +340,7 @@ action:
           - service: climate.turn_off
             target:
               entity_id: !input target_climates
-          # Retardo de 1 segundo
-          - delay:
-              seconds: 1
-          # Apagar termostatos (segunda pasada para asegurar)
-          - service: climate.turn_off
-            target:
-              entity_id: !input target_climates
         alias: Secuencia apagado por web
 
 mode: single
+
