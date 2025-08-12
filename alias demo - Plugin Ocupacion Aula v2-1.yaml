@@ -4,125 +4,130 @@ blueprint:
   description: Automatización para gestionar ocupación y Encender switches (On/Off) y termostatos en Home Assistant
   domain: automation
   input:
-    # Selección de la entidad del sensor de movimiento (Sensor Principal del funcionamiento)
-    motion_sensor:
-      name: Sensor de Movimiento
-      description: Sensor que detecta ocupación (switch que cambia de estado)
-      selector:
-        entity:
-          domain: switch
-          multiple: true
-    # Selección de los switches a Encender
-    target_switchesOn:
-      name: Switches a Encender
-      description: Lista de switches que se encenderán/apagarán según ocupación
-      default: ""
-      selector:
-        entity:
-          domain: switch
-          multiple: true
-    # Selección de los switches solo a apagar
-    target_switchesOff:
-      name: Switches a Apagar
-      description: Lista de switches que se apagarán según libre en ocupación
-      default: ""
-      selector:
-        entity:
-          domain: switch
-          multiple: true
-    # Selección de los termostatos a Encender
-    target_climates:
-      name: Termostatos a Encender
-      description: Lista de termostatos que se configurarán según ocupación
-      default: ""
-      selector:
-        entity:
-          domain: climate
-          multiple: true
-    # Selección del input_select para estado del plugin
-    state_plugin:
-      name: Estado del Plugin
-      description: Input Select para el estado del plugin (libre/ocupado)
-      selector:
-        entity:
-          domain: input_select
-          options:
-            - libre
-            - ocupado
-    # Selección del input_select para estados internos
-    state_internal:
-      name: Estado Interno
-      description: Input Select para los estados internos (libre/ocupado/scan)
-      selector:
-        entity:
-          domain: input_select
-          options:
-            - libre
-            - ocupado
-            - scan
-    # Selección del input_select para el modo del plugin
-    mode_plugin:
-      name: Modo del Plugin
-      description: Input Select para el modo del plugin (auto/Manual)
-      selector:
-        entity:
-          domain: input_select
-    # Selección del input_boolean para modo de activación
-    mode_activation:
-      name: Modo de Activación
-      description: Input Boolean para habilitar/deshabilitar la activación de switches
-      selector:
-        entity:
-          domain: input_boolean
-    # Selección del input_boolean para modo de termostato
-    mode_thermostat:
-      name: Modo de Termostato
-      description: Input Boolean para habilitar/deshabilitar el control del termostato
-      selector:
-        entity:
-          domain: input_boolean
-    # Temperatura objetivo para los termostatos
-    target_temperature:
-      name: Temperatura Objetivo
-      description: Temperatura a establecer cuando los termostatos se encienden
-      default: 24
-      selector:
-        number:
-          min: 16
-          max: 30
-          unit_of_measurement: "°C"
-    # Modo de ventilador para los termostatos
-    fan_mode:
-      name: Modo de Ventilador
-      description: Modo de ventilador para los termostatos
-      default: Auto low
-      selector:
-        select:
-          options:
-            - Auto low
-            - Low
-            - Medium
-            - High
-    # Tiempo de espera para apagar tras inactividad
-    off_delay:
-      name: Retardo para Apagar
-      description: Tiempo de espera antes de apagar los equipos tras inactividad
-      default: 15
-      selector:
-        number:
-          min: 1
-          max: 60
-          unit_of_measurement: minutes
-    # Tiempo de espera para apagar switches si están encendidos en estado libre
-    switch_delay:
-      name: Retardo de Switches
-      description: Tiempo de espera antes de apagar switches si están encendidos en estado libre
-      default: 10
-      selector:
-        number:
-          min: 1
-          max: 60
-          unit_of_measurement: minutes
+  # Selección de la entidad del sensor de movimiento (Sensor Principal del funcionamiento)
+  motion_sensor:
+    name: Sensor de Movimiento
+    description: Sensor que detecta ocupación (switch que cambia de estado)
+    selector:
+      entity:
+        domain: switch
+        multiple: true
+
+  # Selección de los switches a Encender
+  target_switchesOn:
+    name: Switches a Encender
+    description: Lista de switches que se encenderán/apagarán según ocupación
+    default: ""
+    selector:
+      entity:
+        domain: switch
+        multiple: true
+
+  # Selección de los switches solo a apagar
+  target_switchesOff:
+    name: Switches a Apagar
+    description: Lista de switches que se apagarán según libre en ocupación
+    default: ""
+    selector:
+      entity:
+        domain: switch
+        multiple: true
+
+  # Selección de los termostatos a Encender
+  target_climates:
+    name: Termostatos a Encender
+    description: Lista de termostatos que se configurarán según ocupación
+    default: ""
+    selector:
+      entity:
+        domain: climate
+        multiple: true
+
+  # Selección del input_select para estado del plugin
+  state_plugin:
+    name: Estado del Plugin
+    description: Input Select para el estado del plugin (libre/ocupado)
+    selector:
+      entity:
+        domain: input_select
+
+  # Selección del input_select para estados internos
+  state_internal:
+    name: Estado Interno
+    description: Input Select para los estados internos (libre/ocupado/scan)
+    selector:
+      entity:
+        domain: input_select
+
+  # Selección del input_select para el modo del plugin
+  mode_plugin:
+    name: Modo del Plugin
+    description: Input Select para el modo del plugin (auto/Manual)
+    selector:
+      entity:
+        domain: input_select
+
+  # Selección del input_boolean para modo de activación
+  mode_activation:
+    name: Modo de Activación
+    description: Input Boolean para habilitar/deshabilitar la activación de switches
+    selector:
+      entity:
+        domain: input_boolean
+
+  # Selección del input_boolean para modo de termostato
+  mode_thermostat:
+    name: Modo de Termostato
+    description: Input Boolean para habilitar/deshabilitar el control del termostato
+    selector:
+      entity:
+        domain: input_boolean
+
+  # Temperatura objetivo para los termostatos
+  target_temperature:
+    name: Temperatura Objetivo
+    description: Temperatura a establecer cuando los termostatos se encienden
+    default: 24
+    selector:
+      number:
+        min: 16
+        max: 30
+        unit_of_measurement: "°C"
+
+  # Modo de ventilador para los termostatos
+  fan_mode:
+    name: Modo de Ventilador
+    description: Modo de ventilador para los termostatos
+    default: Auto low
+    selector:
+      select:
+        options:
+          - Auto low
+          - Low
+          - Medium
+          - High
+
+  # Tiempo de espera para apagar tras inactividad
+  off_delay:
+    name: Retardo para Apagar
+    description: Tiempo de espera antes de apagar los equipos tras inactividad
+    default: 15
+    selector:
+      number:
+        min: 1
+        max: 60
+        unit_of_measurement: minutes
+
+  # Tiempo de espera para apagar switches si están encendidos en estado libre
+  switch_delay:
+    name: Retardo de Switches
+    description: Tiempo de espera antes de apagar switches si están encendidos en estado libre
+    default: 10
+    selector:
+      number:
+        min: 1
+        max: 60
+        unit_of_measurement: minutes
 
 # Definición de los triggers
 trigger:
