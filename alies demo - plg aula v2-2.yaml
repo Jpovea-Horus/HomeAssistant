@@ -1,9 +1,8 @@
-# Automatización generada a partir del blueprint para control unificado de ocupación y equipos
+# Blueprint para control unificado de ocupación y equipos en Home Assistant
 blueprint:
   name: Bp-Plugin Aula v1.2
-  description: Automatización para gestionar ocupación y Encender switches (On/Off) y termostatos en Home Assistant version 2 - 13/ago/2025 14:45
+  description: Automatización para gestionar ocupación y encender/apagar switches y termostatos en Home Assistant (versión 2 - 13/ago/2025 14:45)
   domain: automation
-
   input:
     # Selección de la entidad del sensor de movimiento (Sensor Principal del funcionamiento)
     motion_sensor:
@@ -13,37 +12,33 @@ blueprint:
         entity:
           domain: switch
           multiple: true
-
-    # Selección de los switches a Encender
+    # Selección de los switches a encender
     target_switchesOn:
       name: Switches a Encender
       description: Lista de switches que se encenderán/apagarán según ocupación
-      default: ""
+      default: []
       selector:
         entity:
           domain: switch
           multiple: true
-
     # Selección de los switches solo a apagar
     target_switchesOff:
       name: Switches a Apagar
       description: Lista de switches que se apagarán según libre en ocupación
-      default: ""
+      default: []
       selector:
         entity:
           domain: switch
           multiple: true
-
-    # Selección de los termostatos a Encender
+    # Selección de los termostatos a encender
     target_climates:
       name: Termostatos a Encender
       description: Lista de termostatos que se configurarán según ocupación
-      default: ""
+      default: []
       selector:
         entity:
           domain: climate
           multiple: true
-
     # Selección del input_select para estado del plugin
     state_plugin:
       name: Estado del Plugin
@@ -51,7 +46,6 @@ blueprint:
       selector:
         entity:
           domain: input_select
-
     # Selección del input_select para estados internos
     state_internal:
       name: Estado Interno
@@ -59,15 +53,13 @@ blueprint:
       selector:
         entity:
           domain: input_select
-
     # Selección del input_select para el modo del plugin
     mode_plugin:
       name: Modo del Plugin
-      description: Input Select para el modo del plugin (auto/Manual)
+      description: Input Select para el modo del plugin (auto/manual)
       selector:
         entity:
           domain: input_select
-
     # Selección del input_boolean para modo de activación
     mode_activation_sw:
       name: Modo de Activación
@@ -75,7 +67,6 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
-
     # Selección del input_boolean para modo de termostato
     mode_thermostat:
       name: Modo de Termostato
@@ -83,7 +74,6 @@ blueprint:
       selector:
         entity:
           domain: input_boolean
-
     # Temperatura objetivo para los termostatos
     target_temperature:
       name: Temperatura Objetivo
@@ -94,20 +84,18 @@ blueprint:
           min: 16
           max: 30
           unit_of_measurement: "°C"
-
     # Modo de ventilador para los termostatos
     fan_mode:
       name: Modo de Ventilador
       description: Modo de ventilador para los termostatos
-      default: Auto low
+      default: "Auto low"
       selector:
         select:
           options:
-            - Auto low
-            - Low
-            - Medium
-            - High
-
+            - "Auto low"
+            - "Low"
+            - "Medium"
+            - "High"
     # Tiempo de espera para apagar tras inactividad
     off_delay:
       name: Retardo para Apagar
@@ -118,7 +106,6 @@ blueprint:
           min: 1
           max: 60
           unit_of_measurement: minutes
-
     # Tiempo de espera para apagar switches si están encendidos en estado libre
     switch_delay:
       name: Retardo de Switches
@@ -130,33 +117,40 @@ blueprint:
           max: 60
           unit_of_measurement: minutes
 
+# Automatización generada a partir del blueprint
+alias: !input motion_sensor - Plugin Aula v1.2
+description: Automatización para gestionar ocupación y encender/apagar switches y termostatos
+mode: single
+
 triggers:
-  # Trigger 1: Detecta cuando los switches objetivo cambian de "off" a "on"
-  - entity_id: 
-    - !input target_switchesOn
-    - !input target_switchesOff
+  # Trigger 1: Detecta cuando los switches objetivo (tanto switchesOn como switchesOff) cambian de "off" a "on"
+  - trigger: state
+    entity_id:
+      - !input target_switchesOn
+      - !input target_switchesOff
     from: "off"
     to: "on"
+    for:
+      minutes: !input switch_delay
     id: onSwitchDelay
-    trigger: state
-    # Se activa cuando cualquier switch seleccionado en target_switchesOn se enciende
+    # Se activa cuando cualquier switch en target_switchesOn o target_switchesOff se enciende y permanece así durante switch_delay
 
   # Trigger 2: Detecta cuando el sensor de movimiento cambia de "off" a "on"
-  - entity_id: !input motion_sensor
+  - trigger: state
+    entity_id: !input motion_sensor
     from: "off"
     to: "on"
     id: encender
-    trigger: state
     # Se activa cuando el sensor de movimiento detecta actividad
 
   # Trigger 3: Detecta cuando el sensor de movimiento cambia de "on" a "off"
-  - entity_id: !input motion_sensor
+  - trigger: state
+    entity_id: !input motion_sensor
     from: "on"
     to: "off"
     for:
       seconds: 0
     id: scaner
-    trigger: state
     # Se activa inmediatamente cuando el sensor de movimiento deja de detectar actividad
 
   # Trigger 4: Detecta cuando el estado interno cambia de "ocupado" a "scan" tras un retardo
@@ -180,43 +174,43 @@ triggers:
     # Se activa si el estado interno permanece en "scan" durante el tiempo especificado en switch_delay
 
   # Trigger 6: Detecta cuando el estado del plugin cambia de "libre" a "ocupado"
-  - entity_id: !input state_plugin
+  - trigger: state
+    entity_id: !input state_plugin
     from: libre
     to: ocupado
     id: plugin_ocupado
-    trigger: state
     # Se activa cuando el estado del plugin cambia a "ocupado"
 
   # Trigger 7: Detecta cuando el estado del plugin cambia de "ocupado" a "libre"
-  - entity_id: !input state_plugin
+  - trigger: state
+    entity_id: !input state_plugin
     from: ocupado
     to: libre
     id: plugin_libre
-    trigger: state
     # Se activa cuando el estado del plugin cambia a "libre"
 
   # Trigger 8: Detecta cuando el estado interno cambia de "libre" a "ocupado"
-  - entity_id: !input state_internal
+  - trigger: state
+    entity_id: !input state_internal
     from: libre
     to: ocupado
     id: libre_ocupado
-    trigger: state
     # Se activa cuando el estado interno cambia a "ocupado"
 
   # Trigger 9: Detecta cuando el estado interno cambia de "ocupado" a "scan"
-  - entity_id: !input state_internal
+  - trigger: state
+    entity_id: !input state_internal
     from: ocupado
     to: scan
     id: ocupado_scan
-    trigger: state
     # Se activa cuando el estado interno cambia a "scan"
 
   # Trigger 10: Detecta cuando el estado interno cambia de "scan" a "libre"
-  - entity_id: !input state_internal
+  - trigger: state
+    entity_id: !input state_internal
     from: scan
     to: libre
     id: scan_libre
-    trigger: state
     # Se activa cuando el estado interno cambia a "libre"
 
 actions:
@@ -387,13 +381,9 @@ actions:
               entity_id: !input target_switchesOn
             data: {}
             # Apaga los switches seleccionados para encender
-          - delay:
-              seconds: 1
-            # Retardo de 1 segundo
           - action: climate.turn_off
             target:
               entity_id: !input target_climates
             data: {}
             # Apaga los termostatos
-
         alias: Secuencia apagado por web
