@@ -132,7 +132,9 @@ blueprint:
 
 triggers:
   # Trigger 1: Detecta cuando los switches objetivo cambian de "off" a "on"
-  - entity_id: !input target_switchesOn
+  - entity_id: 
+    - !input target_switchesOn
+    - !input target_switchesOff
     from: "off"
     to: "on"
     id: onSwitchDelay
@@ -393,4 +395,5 @@ actions:
               entity_id: !input target_climates
             data: {}
             # Apaga los termostatos
+
         alias: Secuencia apagado por web
