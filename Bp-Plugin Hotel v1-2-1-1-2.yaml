@@ -388,10 +388,10 @@ action:
             then:
               - action: switch.turn_off
                 target:
-                  entity_id: !input target_switchesOn
-              - action: switch.turn_off
-                target:
-                  entity_id: !input target_switchesOff
+                  entity_id: 
+                   - !input target_switchesOn
+                   - !input target_switchesOff
+                data: {}
               - action: climate.set_hvac_mode
                 data:
                   hvac_mode: "off"
@@ -400,5 +400,6 @@ action:
         alias: Scena_Apagar_a_libre
     default: []
     alias: Scenas_Plg_Habv1-2-1
+
 
 mode: queued
