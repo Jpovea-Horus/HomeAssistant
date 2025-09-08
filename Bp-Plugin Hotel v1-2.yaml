@@ -125,29 +125,29 @@ variables:
   scan_delay: !input scan_delay
 
 trigger:
-- trigger: state #Door Open
+- platform: state #Door Open
     entity_id: !input door_sensor
     to: "on"
     id: ID_puertAb
   
-- trigger: state #Door Closer
+- platform: state #Door Closer
     entity_id: !input door_sensor
     to: "off"
     id: ID_scan
   
-- trigger: state #Motion On
+- platform: state #Motion On
     entity_id: !input motion_sensor
     to: "on"
     id: ID_ocupado
   
-- trigger: state #Stados internos Scan
+- platform: state #Stados internos Scan
     entity_id: !input state_internal
     to: scan
     for:
       minutes: !input scan_delay
     id: ID_ocupadoSM
   
-- trigger: state #Estados Internos Scan tiempo = (off_delay)
+- platform: state #Estados Internos Scan tiempo = (off_delay)
     entity_id: !input state_internal
     to: scan
     for:
@@ -155,7 +155,7 @@ trigger:
     id: ID_apagar
     from: puertAbierta
   
-- trigger: state #Estados Internos Scan tiempo = (switch_delay) accionado por sw On/off
+- platform: state #Estados Internos Scan tiempo = (switch_delay) accionado por sw On/off
     entity_id: !input state_internal
     to: scan
     for:
@@ -163,13 +163,13 @@ trigger:
     id: ID_apagar
     from: libre
   
-- trigger: state #Estados del plugin pasa de ocupado a libre >> apagar todo (Web)
+- platform: state #Estados del plugin pasa de ocupado a libre >> apagar todo (Web)
     entity_id: !input state_plugin
     from: ocupado
     to: libre
     id: ID_apagar
   
-- trigger: state #Sw on/off de libre a scan
+- platform: state #Sw on/off de libre a scan
     entity_id: !input target_switchesOn
     from: "off"
     to: "on"
@@ -390,5 +390,6 @@ action:
 
 
 mode: queued
+
 
 
