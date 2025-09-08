@@ -127,12 +127,12 @@ variables:
 trigger:
 - trigger: state #Door Open
     entity_id: !input door_sensor
-    to: "on"
+    to: "Open"
     id: ID_puertAb
   
 - trigger: state #Door Closer
     entity_id: !input door_sensor
-    to: "off"
+    to: "Closed"
     id: ID_scan
   
 - trigger: state #Motion On
@@ -387,5 +387,6 @@ action:
         alias: Scena_Apagar_a_libre
     default: []
     alias: No_action_if_no_conditions_match
+
 
 mode: queued
