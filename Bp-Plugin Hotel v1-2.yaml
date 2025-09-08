@@ -127,12 +127,12 @@ variables:
 trigger:
 - trigger: state #Door Open
     entity_id: !input door_sensor
-    to: Open
+    to: "on"
     id: ID_puertAb
   
 - trigger: state #Door Closer
     entity_id: !input door_sensor
-    to: Closed
+    to: "off"
     id: ID_scan
   
 - trigger: state #Motion On
@@ -390,4 +390,5 @@ action:
 
 
 mode: queued
+
 
