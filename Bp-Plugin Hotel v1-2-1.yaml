@@ -125,14 +125,6 @@ variables:
   scan_delay: !input scan_delay
 
 trigger:
-  - platform: state
-    entity_id: !input door_sensor
-    to: "on"
-    id: ID_puertAb
-  - platform: state
-    entity_id: !input door_sensor
-    to: "off"
-    id: ID_scan
   - platform: state #Motion On
     entity_id: !input motion_sensor
     to: "on"
@@ -382,5 +374,6 @@ action:
 
 
 mode: queued
+
 
 
