@@ -388,11 +388,7 @@ action:
             then:
               - action: switch.turn_off
                 target:
-                  entity_id: !input target_switchesOn
-                data: {}
-              - action: switch.turn_off
-                target:
-                  entity_id: !input target_switchesOff
+                  entity_id: "{{ (states('!input target_switchesOn') + states('!input target_switchesOff')) | list }}"
                 data: {}
               - action: climate.set_hvac_mode
                 data:
@@ -405,4 +401,5 @@ action:
 
 
 mode: queued
+
 
