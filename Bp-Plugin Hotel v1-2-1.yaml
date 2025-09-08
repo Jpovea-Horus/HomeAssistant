@@ -126,49 +126,49 @@ variables:
 
 trigger:
   - platform: state
-      entity_id: !input door_sensor
-      to: "on"
-      id: ID_puertAb
+    entity_id: !input door_sensor
+    to: "on"
+    id: ID_puertAb
   - platform: state
-      entity_id: !input door_sensor
-      to: "off"
-      id: ID_scan
+    entity_id: !input door_sensor
+    to: "off"
+    id: ID_scan
   - platform: state #Motion On
-      entity_id: !input motion_sensor
-      to: "on"
-      id: ID_ocupado
+    entity_id: !input motion_sensor
+    to: "on"
+    id: ID_ocupado
   - platform: state #Stados internos Scan
-      entity_id: !input state_internal
-      to: scan
-      for:
-        minutes: !input scan_delay
-      id: ID_ocupadoSM
+    entity_id: !input state_internal
+    to: scan
+    for:
+      minutes: !input scan_delay
+    id: ID_ocupadoSM
   - platform: state #Estados Internos Scan tiempo = (off_delay)
-      entity_id: !input state_internal
-      to: scan
-      for:
-        minutes: !input off_delay
-      id: ID_apagar
-      from: puertAbierta
+    entity_id: !input state_internal
+    to: scan
+    for:
+      minutes: !input off_delay
+    id: ID_apagar
+    from: puertAbierta
   - platform: state #Estados Internos Scan tiempo = (switch_delay) accionado por sw On/off
-      entity_id: !input state_internal
-      to: scan
-      for:
-        minutes: !input switch_delay
-      id: ID_apagar
-      from: libre
+    entity_id: !input state_internal
+    to: scan
+    for:
+      minutes: !input switch_delay
+    id: ID_apagar
+    from: libre
   - platform: state #Estados del plugin pasa de ocupado a libre >> apagar todo (Web)
-      entity_id: !input state_plugin
-      from: ocupado
-      to: libre
-      id: ID_apagar
+    entity_id: !input state_plugin
+    from: ocupado
+    to: libre
+    id: ID_apagar
   - platform: state #Sw on/off de libre a scan
-      entity_id: !input target_switchesOn
-      from: "off"
-      to: "on"
-      for:
-        seconds: 2
-      id: ID_SwOn
+    entity_id: !input target_switchesOn
+    from: "off"
+    to: "on"
+    for:
+      seconds: 2
+    id: ID_SwOn
 condition: []
 
 action:
@@ -382,4 +382,5 @@ action:
 
 
 mode: queued
+
 
