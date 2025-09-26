@@ -227,7 +227,7 @@ trigger:
   to: puertAbierta
   for:
     minutes: !input delay_off
-  id: ID_puertAbTime
+  id: ID_apagar
   
 - trigger: state #Estados Internos Scan tiempo = (delay_switch) accionado por sw On/off
   entity_id: !input state_internal
@@ -519,6 +519,7 @@ action:
         alias: Scena_Apagar_a_libre
     default: []
     alias: Scenas_Plg_Habv1.3.2
+
 
 
 mode: queued
