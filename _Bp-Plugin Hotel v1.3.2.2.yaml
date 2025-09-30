@@ -222,7 +222,7 @@ trigger:
     minutes: !input delay_puertAb
   id: ID_puertAbTime
 
-- trigger: state #Estados Internos puertAb >> delay_off >> Libre "_________Test________"
+- trigger: state #Estados Internos puertAb >> delay_off >> Libre
   entity_id: !input state_internal
   to: puertAbierta
   for:
@@ -382,34 +382,34 @@ action:
             choose:
               - conditions:
                   - condition: state
-                    entity_id: input_select.state_internal
+                    entity_id: !input state_internal
                     state: puertAbierta
                 sequence:
                   - action: input_select.select_option
                     data:
                       option: scan
                     target:
-                      entity_id: input_select.state_internal
+                      entity_id: !input state_internal
                   - action: input_select.select_option
                     data:
                       option: ocupado
                     target:
-                      entity_id: input_select.state_plugin
+                      entity_id: !input state_plugin
               - conditions:
                   - condition: state
-                    entity_id: input_select.state_internal
+                    entity_id: !input state_internal
                     state: libre
                 sequence:
                   - action: input_select.select_option
                     data:
                       option: ocupado
                     target:
-                      entity_id: input_select.state_plugin
+                      entity_id: !input state_plugin
                   - action: input_select.select_option
                     data:
                       option: scan
                     target:
-                      entity_id: input_select.state_internal
+                      entity_id: !input state_internal
         alias: Scena_puertAb_a_scan
 
       - conditions: #Scena scan a ocup
@@ -543,6 +543,7 @@ action:
         alias: Scena_Apagar_a_libre
     default: []
     alias: Scenas_Plg_Habv1.3.2.2
+
 
 
 
