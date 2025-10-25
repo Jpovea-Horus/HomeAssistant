@@ -1,4 +1,4 @@
-# Bp-Plugin Hotel versiones 1 al 3
+# Bp-Plugin Hotel versiones 1...
 
 ## Descripción
 Esta automatización para Home Assistant está diseñada para gestionar la ocupación en una habitación, como en un entorno de hotel. Controla switches y termostatos en función de sensores de puerta y movimiento, permitiendo un manejo eficiente de los dispositivos según el estado de ocupación (libre, ocupado, etc.) y los modos configurados (automático o manual).
