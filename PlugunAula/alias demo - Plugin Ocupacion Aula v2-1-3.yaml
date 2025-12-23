@@ -125,7 +125,7 @@ trigger:
       minutes: !input off_delay
     id: apagar
   - platform: state
-    entity_id: "{{ !input target_switchesOn + !input target_switchesOff }}"
+    entity_id: !input target_switchesOn
     from: "off"
     to: "on"
     for:
@@ -336,3 +336,4 @@ action:
           level: warning
 
 mode: single
+
