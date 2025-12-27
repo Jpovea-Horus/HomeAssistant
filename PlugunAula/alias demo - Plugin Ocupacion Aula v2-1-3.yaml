@@ -1,6 +1,6 @@
 # Blueprint para control unificado de ocupación y equipos en Home Assistant
 blueprint:
-  name: Bp-Plugin Aula v1.2.2
+  name: Bp-Plugin Aula v1.2.3
   description: Automatización para gestionar ocupación y Encender switches (On/Off) y termostatos en Home Assistant
   domain: automation
   input:
@@ -320,6 +320,13 @@ action:
           - service: switch.turn_off
             target:
               entity_id: !input target_switchesOff
+          # Cambiar estados a libre
+          - service: input_select.select_option
+            target:
+              entity_id:
+                - !input state_internal
+            data:
+              option: libre
           # Retardo de 1 segundo
           - delay:
               seconds: 1
@@ -336,4 +343,5 @@ action:
           level: warning
 
 mode: single
+
 
