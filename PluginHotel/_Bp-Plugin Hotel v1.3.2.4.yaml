@@ -159,7 +159,7 @@ blueprint:
         number:
           min: 1
           max: 60
-          unit_of_measurement: minutes
+          unit_of_measurement: minutos
     delay_scan:
       name: Retardo de Scan al SM
       description: Tiempo de espera para escanear si el sensor de movimiento está activo
@@ -168,7 +168,7 @@ blueprint:
         number:
           min: 1
           max: 3600
-          unit_of_measurement: seconds
+          unit_of_measurement: segundos
     delay_switch:
       name: Retardo de Switches
       description: Tiempo de espera antes de apagar switches si están encendidos en estado libre
@@ -177,7 +177,7 @@ blueprint:
         number:
           min: 1
           max: 60
-          unit_of_measurement: minutes
+          unit_of_measurement: minutos
     delay_puertAb:
       name: Retardo para Apagar AA
       description: Tiempo de espera por puerta abierta on para apagar los AA
@@ -186,7 +186,7 @@ blueprint:
         number:
           min: 1
           max: 60
-          unit_of_measurement: minutes
+          unit_of_measurement: minutos
 
 variables:
   delay_off: !input delay_off
@@ -214,14 +214,14 @@ trigger:
   entity_id: !input state_internal
   to: scan
   for:
-    minutes: !input delay_scan
+    minutos: !input delay_scan
   id: ID_ocupadoSM
 
 - trigger: state #Estados Internos Scan tiempo = (delay_off)
   entity_id: !input state_internal
   to: scan
   for:
-    minutes: !input delay_off
+    minutos: !input delay_off
   id: ID_apagar
   from: puertAbierta
 
@@ -229,21 +229,21 @@ trigger:
   entity_id: !input state_internal
   to: puertAbierta
   for:
-    minutes: !input delay_puertAb
+    minutos: !input delay_puertAb
   id: ID_puertAbTime
 
 - trigger: state #Estados Internos puertAb >> delay_off >> Libre "_________Test________"
   entity_id: !input state_internal
   to: puertAbierta
   for:
-    minutes: !input delay_off
+    minutos: !input delay_off
   id: ID_apagar
 
 - trigger: state #Estados Internos Scan tiempo = (delay_switch) accionado por sw On/off
   entity_id: !input state_internal
   to: scan
   for:
-    minutes: !input delay_switch
+    minutos: !input delay_switch
   id: ID_apagar
   from: libre
 
@@ -258,7 +258,7 @@ trigger:
   from: "off"
   to: "on"
   for:
-    seconds: 2
+    segundos: 2
   id: ID_SwOn
 
 - trigger: state #Sw Off on/off de scan a ocup
@@ -266,7 +266,7 @@ trigger:
   from: "off"
   to: "on"
   for:
-    seconds: 2
+    segundos: 2
   id: ID_SwOffOn
 
 # condition: []
@@ -586,7 +586,8 @@ action:
           entity_id: !input target_climates
     alias: Scena_Apagar_a_libre
   default: []
-  alias: Scenas_Plg_Habv1.3.2.2
+  alias: Scenas_Plg_Habv1.3.2.4
 
 mode: queued
+
 
