@@ -1,5 +1,5 @@
 blueprint:
-  name: Bp-Plugin Hotel v1.3.2.2
+  name: Bp-Plugin Hotel v1.3.2.4
   description: |
     Automatización para gestionar ocupación en una habitación (ej. hotel). Controla switches y termostatos según sensores de puerta y movimiento.
     Asegúrate de configurar:
@@ -589,3 +589,4 @@ action:
   alias: Scenas_Plg_Habv1.3.2.2
 
 mode: queued
+
