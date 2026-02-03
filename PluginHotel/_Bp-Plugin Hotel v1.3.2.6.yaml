@@ -448,30 +448,30 @@ action:
         target:
           entity_id: !input target_switchesOff
       - choose:
-      - conditions:
-        - condition: state
-          entity_id: !input mode_Setpointoff
-          state: "off"
-        sequence:
-        - action: climate.turn_off
-          target:
-            entity_id: !input target_climates
-      - conditions:
-        - condition: state
-          entity_id: !input mode_Setpointoff
-          state: "on"
-        sequence:
-        - action: climate.set_temperature
-          data:
-            temperature: !input temperature_SetPointOff
-            hvac_mode: cool
-          target:
-            entity_id: !input target_climates
-        - action: climate.set_fan_mode
-          data:
-            fan_mode: !input fanMode_SetPointOff
-          target:
-            entity_id: !input target_climates
+        - conditions:
+          - condition: state
+            entity_id: !input mode_Setpointoff
+            state: "off"
+          sequence:
+          - action: climate.turn_off
+            target:
+              entity_id: !input target_climates
+        - conditions:
+          - condition: state
+            entity_id: !input mode_Setpointoff
+            state: "on"
+          sequence:
+          - action: climate.set_temperature
+            data:
+              temperature: !input temperature_SetPointOff
+              hvac_mode: cool
+            target:
+              entity_id: !input target_climates
+          - action: climate.set_fan_mode
+            data:
+              fan_mode: !input fanMode_SetPointOff
+            target:
+              entity_id: !input target_climates
     alias: Scena_puertAb_a_librePuertaAb
 
   - conditions:
