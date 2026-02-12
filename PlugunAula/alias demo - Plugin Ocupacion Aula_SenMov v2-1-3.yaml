@@ -9,7 +9,7 @@ blueprint:
       description: Sensor que detecta ocupación (switch que cambia de estado)
       selector:
         entity:
-          domain: sensor
+          domain: binary_sensor
           multiple: true
     target_switchesOn:
       name: Switches a Encender
@@ -343,3 +343,4 @@ action:
       level: warning
 
 mode: single
+
