@@ -1,6 +1,6 @@
 ## Descripción General
 - **Aula vers**: Gestiona ocupación en un aula utilizando un sensor de movimiento para controlar switches y termostatos según los estados `libre`, `ocupado` y `scan`, con modos `auto` o `manual`. Ideal para optimizar el uso de energía en espacios con ocupación variable.
-- **Hotel vers**: Gestiona ocupación en una habitación de hotel usando sensores de movimiento y puerta. Controla switches y termostatos según los estados `libre`, `ocupado`, `scan` y `puertAbierta`, con modos `auto` o `manual`. Incluye funciones avanzadas como manejo de puerta abierta y ajuste de temperatura al apagar.
+- **Hotel vers**: Gestiona ocupación en una habitación de hotel usando sensores de movimiento y puerta. Controla switches y termostatos según los estados `libre`, `ocupado`, `scan`, `puertAbierta` y `librePuertaAb`, con modos `auto` o `manual`. Incluye funciones avanzadas como manejo de puerta abierta, estado `librePuertaAb` (evita transiciones erróneas mientras la puerta permanece abierta) y ajuste de temperatura al apagar.
 
 ## Requisitos
 ### Input Select
@@ -9,7 +9,9 @@
   - `state_internal`: `libre`, `ocupado`, `scan`
   - `mode_plugin`: `auto`, `manual`
 - **Hotel**: 
-  - Igual que Aula, pero `state_internal` incluye `puertAbierta` entre otras adicionalmente.
+  - `state_plugin`: `libre`, `ocupado`
+  - `state_internal`: `libre`, `ocupado`, `scan`, `puertAbierta`, `librePuertaAb`
+  - `mode_plugin`: `auto`, `manual`
 
 ## Funcionamiento
 - **Aula**: 
@@ -18,10 +20,11 @@
   - Modo `single`: Procesa un desencadenante a la vez.
 
 - **Hotel**: 
-  - Usa sensores de movimiento y puerta, con estados adicionales (`puertAbierta`).
+  - Usa sensores de movimiento y puerta, con estados adicionales (`puertAbierta`, `librePuertaAb`).
   - En modo `auto`, enciende dispositivos al detectar ocupación (movimiento o puerta abierta); apaga switches y ajusta/apaga termostatos tras inactividad (`delay_off`) o puerta abierta prolongada (`delay_puertAb`).
   - Modo `queued`: Procesa desencadenantes en orden.
   - **Diferencia**: Hotel incluye lógica para apagar termostatos por puerta abierta y ajustar temperatura al apagar ocupación.
+  - **Estado `librePuertaAb`**: Transición intermedia cuando la puerta permanece abierta tras inactividad; evita pasar directamente a `libre` y mantiene la semántica de puerta abierta. Si en `librePuertaAb` se detecta ocupación (actuador On o sensor de movimiento), pasa a `puertAbierta` + `ocupado` sin encender equipos.
 
 ## Escenarios Principales
 - **Aula**: 
@@ -35,8 +38,11 @@
 - **Hotel**: 
   - Incluye los de Aula más:
     1. Puerta abierta: `libre` → `puertAbierta`, enciende dispositivos.
-    2. Puerta cerrada: `puertAbierta`/`libre` → `scan`, verifica movimiento.
+    2. Puerta cerrada: `puertAbierta`/`librePuertaAb`/`libre` → `scan`, verifica movimiento.
     3. Puerta abierta prolongada: Apaga termostatos si `mode_puertAb` está activo.
+    4. **`puertAbierta` + inactividad (`delay_off`) + sin movimiento**: → `librePuertaAb` + `libre`, apaga equipos.
+    5. **`librePuertaAb` + actuador On encendido**: → `puertAbierta` + `ocupado` (solo estados, sin encender equipos; puerta sigue abierta).
+    6. **`librePuertaAb` + sensor de movimiento activo**: → `puertAbierta` + `ocupado` (solo estados, sin encender equipos; puerta sigue abierta).
 
 ## Notas
 - **Aula**: Más simple, centrada en sensores de movimiento. Ideal para entornos sin puertas controladas.
@@ -58,4 +64,13 @@ Para soporte, crea un issue en el repositorio o usa el canal de contacto preferi
 
 **Resumen Final**: 
 - **Aula version** es más simple, enfocado en aulas con control basado solo en movimiento. 
-- **Hotel version** es más avanzado, ideal para hoteles, con soporte para sensores de puerta, gestión de puerta abierta y control de temperatura al apagar. Ambos optimizan el uso de energía, pero Hotel ofrece mayor flexibilidad para entornos complejos.
+- **Hotel version** es más avanzado, ideal para hoteles, con soporte para sensores de puerta, estado `librePuertaAb`, gestión de puerta abierta y control de temperatura al apagar. Ambos optimizan el uso de energía, pero Hotel ofrece mayor flexibilidad para entornos complejos.
+
+---
+
+## Historial de Cambios (Hotel)
+
+### v1.3.2.8
+- **Scena_SW_librePuertaAb_a_puertAb_ocup**: En `librePuertaAb` + `libre`, si se enciende un actuador On → `puertAbierta` + `ocupado` (solo estados, sin encender equipos).
+- **Scena_SMov_librePuertaAb_a_puertAb_ocup**: En `librePuertaAb` + `libre`, si se activa el sensor de movimiento → `puertAbierta` + `ocupado` (solo estados, sin encender equipos).
+- Corrige la lógica errónea que pasaba a scan/ocupado perdiendo el sentido de puerta abierta.
