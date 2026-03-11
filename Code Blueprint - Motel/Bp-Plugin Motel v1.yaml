@@ -1,0 +1,250 @@
+blueprint:
+  name: Bp-Plugin Motel v1
+  description: Automatización para habitaciones de motel - estados Libre/Ocupado/Sucia, actuadores, semáforo y apagado por tiempo
+  domain: automation
+
+  input:
+    # --- Actuadores ---
+    actuadores_on:
+      name: Actuadores On
+      description: Switches que se encienden/apagan según estado
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    actuadores_off:
+      name: Actuadores Off
+      description: Switches que se apagan en Libre/Sucia
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    actuador_luz_serv:
+      name: Actuador Luz Servicio
+      description: Luz de servicio (se mantiene encendida en estado Sucia)
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    actuador_puert_gar:
+      name: Actuador Puerta Garaje
+      description: Actuador de puerta de garaje
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    termostat:
+      name: Termostato
+      description: Termostato(s) de la habitación
+      default: []
+      selector:
+        entity:
+          domain: climate
+          multiple: true
+
+    # --- Semáforo ---
+    semaforo_rojo:
+      name: Semáforo Rojo
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    semaforo_amar:
+      name: Semáforo Amarillo
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    semaforo_verde:
+      name: Semáforo Verde
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+
+    # --- Entradas (para uso futuro) ---
+    sensor_movimiento:
+      name: Sensor Movimiento
+      description: Reservado para lógica futura
+      default: []
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+    sensor_puerta:
+      name: Sensor Puerta
+      description: Reservado para lógica futura
+      default: []
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+
+    # --- Estado y tiempos ---
+    state_plugin:
+      name: Estado del Plugin
+      description: Auxiliar con estados Reservado, Bloqueado, Libre, Ocupado, Sucia
+      selector:
+        entity:
+          domain: input_select
+
+    delay_off:
+      name: Retardo para Apagar (min)
+      description: Tiempo con actuadores/termo encendidos en Libre o Sucia antes de apagar
+      default: 5
+      selector:
+        select:
+          options:
+            - 5
+            - 10
+            - 15
+            - 20
+            - 30
+
+trigger:
+  # Al cambiar estado a Libre → apagar todo + semáforo
+  - trigger: state
+    entity_id: !input state_plugin
+    to: Libre
+    id: id_a_libre
+  # Al cambiar estado a Ocupado → solo semáforo
+  - trigger: state
+    entity_id: !input state_plugin
+    to: Ocupado
+    id: id_a_ocupado
+  # Al cambiar estado a Sucia → apagar todo excepto LuzServ + semáforo
+  - trigger: state
+    entity_id: !input state_plugin
+    to: Sucia
+    id: id_a_sucia
+  # Actuadores/termo encendidos más de N min (Libre o Sucia) → apagar según estado
+  - trigger: state
+    entity_id:
+      - !input actuadores_on
+      - !input actuadores_off
+      - !input termostat
+    to: "on"
+    for:
+      minutes: !input delay_off
+    id: id_apagar_por_tiempo
+
+action:
+  - choose:
+      # --- Entrar en Libre: apagar todo sin excepciones + semáforo Libre
+      - conditions:
+          - condition: trigger
+            id: id_a_libre
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id:
+                - !input actuadores_on
+                - !input actuadores_off
+                - !input actuador_luz_serv
+                - !input actuador_puert_gar
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: !input termostat
+            data:
+              hvac_mode: "off"
+          - action: switch.turn_off
+            target:
+              entity_id: !input semaforo_rojo
+          - action: switch.turn_off
+            target:
+              entity_id: !input semaforo_amar
+          - action: switch.turn_on
+            target:
+              entity_id: !input semaforo_verde
+        alias: Estado Libre - apagar todo y semáforo
+
+      # --- Entrar en Ocupado: solo semáforo (sin limitaciones de actuadores)
+      - conditions:
+          - condition: trigger
+            id: id_a_ocupado
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id:
+                - !input semaforo_verde
+                - !input semaforo_amar
+          - action: switch.turn_on
+            target:
+              entity_id: !input semaforo_rojo
+        alias: Estado Ocupado - semáforo
+
+      # --- Entrar en Sucia: apagar todo excepto Luz Servicio + semáforo
+      - conditions:
+          - condition: trigger
+            id: id_a_sucia
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id:
+                - !input actuadores_on
+                - !input actuadores_off
+                - !input actuador_puert_gar
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: !input termostat
+            data:
+              hvac_mode: "off"
+          - action: switch.turn_off
+            target:
+              entity_id:
+                - !input semaforo_verde
+                - !input semaforo_rojo
+          - action: switch.turn_on
+            target:
+              entity_id: !input semaforo_amar
+        alias: Estado Sucia - apagar excepto LuzServ y semáforo
+
+      # --- En Libre: actuadores/termo encendidos > delay_off → apagar todo
+      - conditions:
+          - condition: trigger
+            id: id_apagar_por_tiempo
+          - condition: state
+            entity_id: !input state_plugin
+            state: Libre
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id:
+                - !input actuadores_on
+                - !input actuadores_off
+                - !input actuador_luz_serv
+                - !input actuador_puert_gar
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: !input termostat
+            data:
+              hvac_mode: "off"
+        alias: Libre - apagar por tiempo
+
+      # --- En Sucia: actuadores/termo encendidos > delay_off → apagar todo excepto LuzServ
+      - conditions:
+          - condition: trigger
+            id: id_apagar_por_tiempo
+          - condition: state
+            entity_id: !input state_plugin
+            state: Sucia
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id:
+                - !input actuadores_on
+                - !input actuadores_off
+                - !input actuador_puert_gar
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: !input termostat
+            data:
+              hvac_mode: "off"
+        alias: Sucia - apagar por tiempo (excepto LuzServ)
+    default: []
+
+mode: queued
