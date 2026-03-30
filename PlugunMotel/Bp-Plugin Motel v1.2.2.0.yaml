@@ -1,6 +1,6 @@
 blueprint:
-  name: Bp-Plugin Motel v1.2.2
-  description: Automatización para habitaciones de motel v1.2.2 - estados Aseo, Libre, Ocupado, Sucia, actuadores, semáforo, termo al ocupado y apagado por tiempo
+  name: Bp-Plugin Motel v1.2.2.0
+  description: Automatización para habitaciones de motel v1.2.2.0 - estados Aseo, Libre, Ocupado, Sucia, actuadores, semáforo, termo al ocupado y apagado por tiempo
   domain: automation
 
   input:
