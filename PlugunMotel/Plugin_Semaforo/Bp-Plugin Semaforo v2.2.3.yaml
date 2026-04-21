@@ -1,0 +1,163 @@
+# -----------------------------------------------------------------------------
+# Bp-Plugin Semáforo — mapa de estados (mismo orden lógico que Plugin Motel)
+#
+# Rojo    = Ocupado   → prioridad; hab ocupada, electro-imán sin acceso
+# Amarillo = Sucia o Aseo → limpieza / habitación no lista para entrar como libre
+# Verde   = Libre     → habitación libre, entrada permitida por esta puerta
+#
+# Tras 1 s estable se actualiza el semáforo (evita parpadeos por cambios fugaces).
+# Los switch.turn_on/off solo se envían si hace falta (evita comandos MQTT reiterados).
+# -----------------------------------------------------------------------------
+
+blueprint:
+  name: Bp-Plugin Semaforo v2.2.3
+  description: Semáforo motel — Ocupado=rojo (prioridad, hab ocupada / electro-imán), Aseo o Sucia=amarillo, Libre=verde (habilita entrada por la puerta). 1 s estable. Mismo input_select que Bp-Plugin Motel
+  domain: automation
+
+  input:
+    state_plugin:
+      name: Estado del Plugin
+      description: Mismo auxiliar que la automatización Plugin Motel (Aseo, Libre, Ocupado, Sucia)
+      selector:
+        entity:
+          domain: input_select
+
+    semaforo_rojo:
+      name: Semáforo Rojo
+      description: Ocupado — prioridad; hab ocupada, electro-imán sin acceso (tras 1s estable)
+      selector:
+        entity:
+          domain: switch
+    semaforo_amar:
+      name: Semáforo Amarillo
+      description: Modos Sucia o Aseo (tras 1s estable)
+      selector:
+        entity:
+          domain: switch
+    semaforo_verde:
+      name: Semáforo Verde
+      description: Libre — habilita entrada por esta puerta (tras 1s estable)
+      selector:
+        entity:
+          domain: switch
+
+# Disparadores: cambio del input_select del plugin; el "for" filtra ruido (<1 s).
+trigger:
+- trigger: state
+  entity_id: !input state_plugin
+  to: Ocupado
+  for:
+    seconds: 3
+  id: id_semaforo_ocup
+- trigger: state
+  entity_id: !input state_plugin
+  to: Libre
+  for:
+    seconds: 3
+  id: id_semaforo_libre
+- trigger: state
+  entity_id: !input state_plugin
+  to:
+  - Sucia
+  - Aseo
+  for:
+    seconds: 3
+  id: id_semaforo_sucia_aseo
+
+action:
+- choose:
+  # --- Ocupado → rojo ON; demás OFF (solo si el estado del switch lo requiere) ---
+  - conditions:
+    - condition: trigger
+      id: id_semaforo_ocup
+    sequence:
+    - if:
+      - condition: state
+        entity_id: !input semaforo_rojo
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: !input semaforo_rojo
+    - if:
+      - condition: state
+        entity_id: !input semaforo_amar
+        state: 'on'
+      then:
+      - action: switch.turn_off
+        target:
+          entity_id: !input semaforo_amar
+    - if:
+      - condition: state
+        entity_id: !input semaforo_verde
+        state: 'on'
+      then:
+      - action: switch.turn_off
+        target:
+          entity_id: !input semaforo_verde
+    alias: Plg_ semaforo - Ocupado
+
+  # --- Libre → verde ON; rojo y amarillo OFF ---
+  - conditions:
+    - condition: trigger
+      id: id_semaforo_libre
+    sequence:
+    - if:
+      - condition: state
+        entity_id: !input semaforo_verde
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: !input semaforo_verde
+    - if:
+      - condition: state
+        entity_id: !input semaforo_rojo
+        state: 'on'
+      then:
+      - action: switch.turn_off
+        target:
+          entity_id: !input semaforo_rojo
+    - if:
+      - condition: state
+        entity_id: !input semaforo_amar
+        state: 'on'
+      then:
+      - action: switch.turn_off
+        target:
+          entity_id: !input semaforo_amar
+    alias: Plg_ semaforo - Libre
+
+  # --- Sucia o Aseo → amarillo ON; rojo y verde OFF ---
+  - conditions:
+    - condition: trigger
+      id: id_semaforo_sucia_aseo
+    sequence:
+    - if:
+      - condition: state
+        entity_id: !input semaforo_amar
+        state: 'off'
+      then:
+      - action: switch.turn_on
+        target:
+          entity_id: !input semaforo_amar
+    - if:
+      - condition: state
+        entity_id: !input semaforo_verde
+        state: 'on'
+      then:
+      - action: switch.turn_off
+        target:
+          entity_id: !input semaforo_verde
+    - if:
+      - condition: state
+        entity_id: !input semaforo_rojo
+        state: 'on'
+      then:
+      - action: switch.turn_off
+        target:
+          entity_id: !input semaforo_rojo
+    alias: Plg_ semaforo - Aseo/Sucia
+  default: []
+
+mode: queued
