@@ -1,0 +1,50 @@
+alias: Secuencia encender
+conditions:
+  - condition: trigger
+    id: encender
+  - condition: state
+    entity_id: input_select.estadosinternos
+    state: libre
+sequence:
+  - target:
+      entity_id:
+        - input_select.estadosinternos
+        - input_select.estadoplugin
+    data:
+      option: ocupado
+    action: input_select.select_option
+  - condition: state
+    entity_id: input_select.modo_plugin
+    state: auto
+  - choose:
+      # Branch for lights (dependent on modo_act_on)
+      - conditions:
+          - condition: state
+            entity_id: input_boolean.modo_act_on
+            state: "on"
+        sequence:
+          - target:
+              entity_id:
+                - switch.demo1
+                - switch.demo2
+            action: switch.turn_on
+            data: {}
+      # Branch for thermostat (dependent on modo_termostato)
+      - conditions:
+          - condition: state
+            entity_id: input_boolean.modo_termostato
+            state: "on"
+        sequence:
+          - target:
+              entity_id:
+                - climate.demo_thermostato
+            data:
+              temperature: 24
+              hvac_mode: cool
+            action: climate.set_temperature
+          - target:
+              entity_id:
+                - climate.demo_thermostato
+            data:
+              fan_mode: Auto low
+            action: climate.set_fan_mode

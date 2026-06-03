@@ -1,0 +1,498 @@
+# Automatización generada a partir del blueprint para control unificado de ocupación y equipos
+blueprint:
+  name: Bp-Plugin Aula v1.3
+  description: |
+    Automatización para gestionar ocupación y Encender switches (On/Off) y termostatos en Home Assistant version 1.3.
+    Mejoras v1.3: 
+    - Optimización de comandos (evita redundancia).
+    - Sistema de reintentos para switches (Z-Wave/Zigbee).
+    - Temporizador de respaldo para asegurar apagado.
+  domain: automation
+
+  input:
+    # Selección de la entidad del sensor de movimiento (Sensor Principal del funcionamiento)
+    motion_sensor:
+      name: Sensor de Movimiento
+      description: Sensor que detecta ocupación (switch que cambia de estado)
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+
+    # Selección de los switches a Encender
+    target_switchesOn:
+      name: Switches a Encender
+      description: Lista de switches que se encenderán/apagarán según ocupación
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+
+    # Selección de los switches solo a apagar
+    target_switchesOff:
+      name: Switches a Apagar
+      description: Lista de switches que se apagarán según libre en ocupación
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+
+    # Selección de los termostatos a Encender
+    target_climates:
+      name: Termostatos a Encender
+      description: Lista de termostatos que se configurarán según ocupación
+      default: []
+      selector:
+        entity:
+          domain: climate
+          multiple: true
+
+    # Selección del input_select para estado del plugin
+    state_plugin:
+      name: Estado del Plugin
+      description: Input Select para el estado del plugin (libre/ocupado)
+      selector:
+        entity:
+          domain: input_select
+          multiple: false
+
+    # Selección del input_select para estados internos
+    state_internal:
+      name: Estado Interno
+      description: Input Select para los estados internos (libre/ocupado/scan)
+      selector:
+        entity:
+          domain: input_select
+          multiple: false
+
+    # Selección del input_select para el modo del plugin
+    mode_plugin:
+      name: Modo del Plugin
+      description: Input Select para el modo del plugin (auto/Manual)
+      selector:
+        entity:
+          domain: input_select
+          multiple: false
+
+    # Selección del input_boolean para modo de activación
+    mode_activation_sw:
+      name: Modo de Activación
+      description: Input Boolean para habilitar/deshabilitar la activación de switches
+      selector:
+        entity:
+          domain: input_boolean
+          multiple: false
+
+    # Selección del input_boolean para modo de termostato
+    mode_thermostat:
+      name: Modo de Termostato
+      description: Input Boolean para habilitar/deshabilitar el control del termostato
+      selector:
+        entity:
+          domain: input_boolean
+          multiple: false
+
+    # Temperatura objetivo para los termostatos
+    target_temperature:
+      name: Temperatura Objetivo
+      description: Temperatura a establecer cuando los termostatos se encienden
+      default: 24
+      selector:
+        number:
+          min: 16
+          max: 30
+          unit_of_measurement: "°C"
+
+    # Modo de ventilador para los termostatos
+    fan_mode:
+      name: Modo de Ventilador
+      description: Modo de ventilador para los termostatos
+      default: Auto low
+      selector:
+        select:
+          options:
+            - Auto low
+            - Low
+            - Medium
+            - High
+
+    # Tiempo de espera para apagar tras inactividad
+    off_delay:
+      name: Retardo para Apagar
+      description: Tiempo de espera antes de apagar los equipos tras inactividad
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+
+    # Tiempo de espera para apagar switches si están encendidos en estado libre
+    switch_delay:
+      name: Retardo de Switches
+      description: Tiempo de espera antes de apagar switches si están encendidos en estado libre
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+
+    retry_time:
+      name: Tiempo de Reintento (seg)
+      description: Tiempo entre reintentos para asegurar que los switches cambien de estado.
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+
+variables:
+  target_switchesOn: !input target_switchesOn
+  target_switchesOff: !input target_switchesOff
+  target_climates: !input target_climates
+  retry_time: !input retry_time
+
+triggers:
+  # Trigger 1.1: Detecta cuando los switches objetivo cambian de "off" a "on"
+  - entity_id: !input target_switchesOn
+    from: "off"
+    to: "on"
+    id: onSwitchDelay
+    trigger: state
+
+  # Trigger 1.2: Detecta cuando los switches objetivo cambian de "off" a "on"
+  - entity_id: !input target_switchesOff
+    from: "off"
+    to: "on"
+    id: onSwitchDelay
+    trigger: state
+
+  # Trigger 2: Detecta cuando el sensor de movimiento cambia de "off" a "on"
+  - entity_id: !input motion_sensor
+    from: "off"
+    to: "on"
+    id: encender
+    trigger: state
+
+  # Trigger 3: Detecta cuando el sensor de movimiento cambia de "on" a "off"
+  - entity_id: !input motion_sensor
+    from: "on"
+    to: "off"
+    for:
+      seconds: 0
+    id: scaner
+    trigger: state
+
+  # Trigger 4.1: Detecta cuando el estado interno cambia de "ocupado" a "scan" tras un retardo
+  - trigger: state
+    entity_id: !input state_internal
+    from: ocupado
+    to: scan
+    for:
+      minutes: !input off_delay
+    id: apagar
+
+  # Trigger 5: Detecta cuando el estado interno cambia de "libre" a "scan" tras un retardo
+  - trigger: state
+    entity_id: !input state_internal
+    from: libre
+    to: scan
+    for:
+      minutes: !input switch_delay
+    id: apagar
+
+  # Trigger 6: Detecta cuando el estado del plugin cambia de "libre" a "ocupado"
+  - entity_id: !input state_plugin
+    from: libre
+    to: ocupado
+    id: plugin_ocupado
+    trigger: state
+
+  # Trigger 7: Detecta cuando el estado del plugin cambia de "ocupado" a "libre"
+  - entity_id: !input state_plugin
+    from: ocupado
+    to: libre
+    id: plugin_libre
+    trigger: state
+
+  # Trigger 8: Detecta cuando el estado interno cambia de "libre" a "ocupado"
+  - entity_id: !input state_internal
+    from: libre
+    to: ocupado
+    id: libre_ocupado
+    trigger: state
+
+  # Trigger 9: Detecta cuando el estado interno cambia de "ocupado" a "scan"
+  - entity_id: !input state_internal
+    from: ocupado
+    to: scan
+    id: ocupado_scan
+    trigger: state
+
+  # Trigger 10: Detecta cuando el estado interno cambia de "scan" a "libre"
+  - entity_id: !input state_internal
+    from: scan
+    to: libre
+    id: scan_libre
+    trigger: state
+
+  # Trigger 11: Respaldo fijo: si sigue en libre 1 min, reintenta apagar
+  - trigger: state
+    entity_id: !input state_plugin
+    to: libre
+    for:
+      minutes: 1
+    id: ID_timer_respaldo
+
+actions:
+  - choose:
+      # Secuencia Respaldo: 1 min en libre, si hay equipos encendidos reenvia apagado
+      - conditions:
+          - condition: trigger
+            id: ID_timer_respaldo
+          - condition: state
+            entity_id: !input state_plugin
+            state: libre
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ target_switchesOn | length > 0 }}"
+              - condition: template
+                value_template: >
+                  {{ expand(target_switchesOn) | selectattr('state', 'eq', 'on') | list | count > 0 }}
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: !input target_switchesOn
+          - if:
+              - condition: template
+                value_template: "{{ target_switchesOff | length > 0 }}"
+              - condition: template
+                value_template: >
+                  {{ expand(target_switchesOff) | selectattr('state', 'eq', 'on') | list | count > 0 }}
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: !input target_switchesOff
+          - if:
+              - condition: template
+                value_template: "{{ target_climates | length > 0 }}"
+              - condition: template
+                value_template: >
+                  {{ expand(target_climates) | selectattr('state', 'ne', 'off') | list | count > 0 }}
+            then:
+              - action: climate.turn_off
+                target:
+                  entity_id: !input target_climates
+        alias: Secuencia Respaldo
+
+      # Secuencia 1: Encender dispositivos cuando el sensor de movimiento se activa y el estado interno es "libre"
+      - conditions:
+          - condition: trigger
+            id: encender
+          - condition: state
+            entity_id: !input state_internal
+            state: libre
+        sequence:
+          - action: input_select.select_option
+            target:
+              entity_id:
+                - !input state_internal
+                - !input state_plugin
+            data:
+              option: ocupado
+          - condition: state
+            entity_id: !input mode_plugin
+            state: auto
+          - if:
+              - condition: state
+                entity_id: !input mode_activation_sw
+                state: "on"
+            then:
+              - repeat:
+                  while:
+                    - condition: template
+                      value_template: >
+                        {{ expand(target_switchesOn) | selectattr('state', 'eq', 'off') | list | count > 0 }}
+                    - condition: template
+                      value_template: "{{ repeat.index <= 3 }}"
+                  sequence:
+                    - action: switch.turn_on
+                      target:
+                        entity_id: !input target_switchesOn
+                    - delay:
+                        seconds: !input retry_time
+          - if:
+              - condition: state
+                entity_id: !input mode_thermostat
+                state: "on"
+            then:
+              - condition: template
+                value_template: >
+                  {{ expand(target_climates) | selectattr('state', 'eq', 'off') | list | count > 0 }}
+              - action: climate.set_temperature
+                target:
+                  entity_id: !input target_climates
+                data:
+                  temperature: !input target_temperature
+                  hvac_mode: cool
+              - action: climate.set_fan_mode
+                target:
+                  entity_id: !input target_climates
+                data:
+                  fan_mode: !input fan_mode
+        alias: Secuencia encender
+
+      # Secuencia 2: Cambiar a estado "scan" cuando el sensor de movimiento se desactiva y el estado interno es "ocupado"
+      - conditions:
+          - condition: trigger
+            id: scaner
+          - condition: state
+            entity_id: !input state_internal
+            state: ocupado
+        sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: !input state_internal
+            data:
+              option: scan
+        alias: Secuencia ocupar
+
+      # Secuencia 3: Cambiar a estado "ocupado" cuando el sensor de movimiento se activa y el estado interno es "scan"
+      - conditions:
+          - condition: trigger
+            id: encender
+          - condition: state
+            entity_id: !input state_internal
+            state: scan
+        sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: !input state_internal
+            data:
+              option: ocupado
+        alias: Secuencia scaner
+
+      # Secuencia 4: Apagar dispositivos cuando el estado interno es "scan" tras el retardo de apagado
+      - conditions:
+          - condition: trigger
+            id: apagar
+          - condition: state
+            entity_id: !input state_internal
+            state: scan
+        sequence:
+          - action: input_select.select_option
+            target:
+              entity_id:
+                - !input state_internal
+                - !input state_plugin
+            data:
+              option: libre
+          - condition: state
+            entity_id: !input mode_plugin
+            state: auto
+          - repeat:
+              while:
+                - condition: template
+                  value_template: >
+                    {{ expand(target_switchesOn) | selectattr('state', 'eq', 'on') | list | count > 0 }}
+                - condition: template
+                  value_template: "{{ repeat.index <= 3 }}"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: !input target_switchesOn
+                - delay:
+                    seconds: !input retry_time
+          - repeat:
+              while:
+                - condition: template
+                  value_template: >
+                    {{ expand(target_switchesOff) | selectattr('state', 'eq', 'on') | list | count > 0 }}
+                - condition: template
+                  value_template: "{{ repeat.index <= 3 }}"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: !input target_switchesOff
+                - delay:
+                    seconds: !input retry_time
+          - if:
+              - condition: template
+                value_template: >
+                  {{ expand(target_climates) | selectattr('state', 'ne', 'off') | list | count > 0 }}
+            then:
+              - action: climate.turn_off
+                target:
+                  entity_id: !input target_climates
+        alias: Secuencia apagar
+
+      # Secuencia 5: Cambiar a estado "scan" cuando los switches se encienden y el estado del plugin es "libre"
+      - conditions:
+          - condition: trigger
+            id: onSwitchDelay
+          - condition: state
+            entity_id: !input state_plugin
+            state: libre
+        sequence:
+          - condition: state
+            entity_id: !input mode_plugin
+            state: auto
+          - action: input_select.select_option
+            target:
+              entity_id: !input state_plugin
+            data:
+              option: ocupado
+          - action: input_select.select_option
+            target:
+              entity_id: !input state_internal
+            data:
+              option: scan
+        alias: Secuencia sw-on en libre
+
+      # Secuencia 6: Apagar dispositivos cuando el estado del plugin cambia a "libre"
+      - conditions:
+          - condition: trigger
+            id: plugin_libre
+          - condition: state
+            entity_id: !input state_plugin
+            state: libre
+        sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: !input state_internal
+            data:
+              option: libre
+          - condition: state
+            entity_id: !input mode_plugin
+            state: auto
+          - repeat:
+              while:
+                - condition: template
+                  value_template: >
+                    {{ expand(target_switchesOn) | selectattr('state', 'eq', 'on') | list | count > 0 }}
+                - condition: template
+                  value_template: "{{ repeat.index <= 3 }}"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: !input target_switchesOn
+                - delay:
+                    seconds: !input retry_time
+          - if:
+              - condition: template
+                value_template: >
+                  {{ expand(target_climates) | selectattr('state', 'ne', 'off') | list | count > 0 }}
+            then:
+              - action: climate.turn_off
+                target:
+                  entity_id: !input target_climates
+        alias: Secuencia apagado por web
+
+mode: queued
