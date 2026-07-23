@@ -1,0 +1,177 @@
+# -----------------------------------------------------------------------------
+# Bp-Plugin Semáforo v2.0 — Lógica Secuencial y Robusta
+#
+# Rojo    = Ocupado
+# Amarillo = Sucia o Aseo
+# Verde   = Libre
+#
+# Esta versión 2.0 se enfoca en la fiabilidad de los comandos Z-Wave/Zigbee
+# mediante una ejecución secuencial (apagar primero, encender después) y
+# verificaciones constantes del estado real de los switches.
+# -----------------------------------------------------------------------------
+blueprint:
+  name: Bp-Plugin Semaforo v2.0
+  description: >
+    Semáforo motel v2.0 — Ocupado=rojo, Aseo/Sucia=amarillo, Libre=verde.
+    Lógica secuencial para máxima fiabilidad: apaga primero las luces que no corresponden
+    y luego enciende la correcta, con reintentos y verificaciones.
+  domain: automation
+  input:
+    state_plugin:
+      name: Estado del Plugin
+      description: Auxiliar input_select (Aseo, Libre, Ocupado, Sucia)
+      selector:
+        entity:
+          domain: input_select
+    semaforo_rojo:
+      name: Semáforo Rojo
+      selector:
+        entity:
+          domain: switch
+    semaforo_amar:
+      name: Semáforo Amarillo
+      selector:
+        entity:
+          domain: switch
+    semaforo_verde:
+      name: Semáforo Verde
+      selector:
+        entity:
+          domain: switch
+    tiempo_espera:
+      name: Tiempo de espera (debounce)
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 30
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+    retry_time:
+      name: Tiempo entre pasos (seg)
+      description: Pausa entre apagar una luz y encender la siguiente para evitar colisiones en la red.
+      default: 0
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+    max_retries:
+      name: Reintentos máximos
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          mode: slider
+    verify_timeout:
+      name: Timeout de confirmación (seg)
+      default: 10
+      selector:
+        number:
+          min: 2
+          max: 30
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+
+variables:
+  ent_rojo: !input semaforo_rojo
+  ent_amar: !input semaforo_amar
+  ent_verde: !input semaforo_verde
+  ent_state: !input state_plugin
+  t_step: !input retry_time
+  t_out: !input verify_timeout
+  t_max: !input max_retries
+
+trigger:
+  - trigger: state
+    entity_id: !input state_plugin
+    id: id_cambio_estado
+    for:
+      seconds: !input tiempo_espera
+
+action:
+  - variables:
+      current_room_state: "{{ states(ent_state) }}"
+      # Definir qué luz debe estar ON según el estado
+      target_on: >-
+        {% if current_room_state == 'Ocupado' %} {{ ent_rojo }}
+        {% elif current_room_state == 'Libre' %} {{ ent_verde }}
+        {% elif current_room_state in ['Sucia', 'Aseo'] %} {{ ent_amar }}
+        {% else %} none
+        {% endif %}
+      # Definir qué luces deben estar OFF
+      target_off_1: >-
+        {% if current_room_state == 'Ocupado' %} {{ ent_verde }}
+        {% elif current_room_state == 'Libre' %} {{ ent_rojo }}
+        {% elif current_room_state in ['Sucia', 'Aseo'] %} {{ ent_rojo }}
+        {% else %} none
+        {% endif %}
+      target_off_2: >-
+        {% if current_room_state == 'Ocupado' %} {{ ent_amar }}
+        {% elif current_room_state == 'Libre' %} {{ ent_amar }}
+        {% elif current_room_state in ['Sucia', 'Aseo'] %} {{ ent_verde }}
+        {% else %} none
+        {% endif %}
+
+  - repeat:
+      while:
+        - condition: template
+          value_template: >-
+            {% set desired_on = target_on %}
+            {% set off1 = target_off_1 %}
+            {% set off2 = target_off_2 %}
+            {{ repeat.index <= t_max and (
+              (desired_on != 'none' and not is_state(desired_on, 'on')) or
+              (off1 != 'none' and not is_state(off1, 'off')) or
+              (off2 != 'none' and not is_state(off2, 'off'))
+            ) }}
+        - condition: template
+          value_template: "{{ states(ent_state) == current_room_state }}"
+      sequence:
+        # 1. Apagar luz incorrecta 1
+        - if:
+            - condition: template
+              value_template: "{{ target_off_1 != 'none' and not is_state(target_off_1, 'off') }}"
+          then:
+            - action: switch.turn_off
+              target:
+                entity_id: "{{ target_off_1 }}"
+            - wait_template: "{{ is_state(target_off_1, 'off') }}"
+              timeout: "{{ t_out }}"
+            - delay:
+                seconds: "{{ t_step }}"
+
+        # 2. Apagar luz incorrecta 2
+        - if:
+            - condition: template
+              value_template: "{{ target_off_2 != 'none' and not is_state(target_off_2, 'off') }}"
+          then:
+            - action: switch.turn_off
+              target:
+                entity_id: "{{ target_off_2 }}"
+            - wait_template: "{{ is_state(target_off_2, 'off') }}"
+              timeout: "{{ t_out }}"
+            - delay:
+                seconds: "{{ t_step }}"
+
+        # 3. Encender luz correcta
+        - if:
+            - condition: template
+              value_template: "{{ target_on != 'none' and not is_state(target_on, 'on') }}"
+          then:
+            - action: switch.turn_on
+              target:
+                entity_id: "{{ target_on }}"
+            - wait_template: "{{ is_state(target_on, 'on') }}"
+              timeout: "{{ t_out }}"
+            - delay:
+                seconds: "{{ t_step }}"
+
+mode: queued
+max: 5

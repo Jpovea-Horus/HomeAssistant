@@ -1,0 +1,347 @@
+# -----------------------------------------------------------------------------
+# Bp-Plugin Semáforo — mapa de estados (mismo orden lógico que Plugin Motel)
+#
+# Rojo    = Ocupado   → prioridad; hab ocupada, electro-imán sin acceso
+# Amarillo = Sucia o Aseo → limpieza / habitación no lista para entrar como libre
+# Verde   = Libre     → habitación libre, entrada permitida por esta puerta
+#
+# v1.5 — Estabilidad Z-Wave/Zigbee:
+#   • Tiempos separados: debounce (tiempo_espera), reintento (retry_time),
+#     verificación completa (tiempo_verificacion).
+#   • Secuencia OFF incorrectas → ON correcta con wait_template (patrón Verify Motel).
+#   • Auditoría a los tiempo_verificacion s: corrige 0 luces, 2+ luces o luz equivocada.
+#   • mode queued (no restart) para no abortar secuencias a medias.
+# -----------------------------------------------------------------------------
+blueprint:
+  name: Bp-Plugin Semaforo v1.5
+  description: >
+    Semáforo motel — Ocupado=rojo, Aseo/Sucia=amarillo, Libre=verde.
+    v1.5 aplica cambios tras debounce, confirma switches con wait_template y
+    re-sincroniza el semáforo completo tras tiempo_verificacion (default 20 s).
+    Mismo input_select que Bp-Plugin Motel.
+  domain: automation
+  input:
+    state_plugin:
+      name: Estado del Plugin
+      description: Mismo auxiliar que la automatización Plugin Motel (Aseo, Libre, Ocupado, Sucia)
+      selector:
+        entity:
+          domain: input_select
+    semaforo_rojo:
+      name: Semáforo Rojo
+      description: Ocupado — prioridad; hab ocupada, electro-imán sin acceso
+      selector:
+        entity:
+          domain: switch
+    semaforo_amar:
+      name: Semáforo Amarillo
+      description: Modos Sucia o Aseo
+      selector:
+        entity:
+          domain: switch
+    semaforo_verde:
+      name: Semáforo Verde
+      description: Libre — habilita entrada por esta puerta
+      selector:
+        entity:
+          domain: switch
+    tiempo_espera:
+      name: Tiempo de espera (debounce)
+      description: Segundos con el estado estable antes de aplicar el primer cambio al semáforo.
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 60
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+    retry_time:
+      name: Tiempo de Reintento (seg)
+      description: Pausa entre vueltas de corrección si el switch no confirma (igual concepto que Plugin Motel).
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+    tiempo_verificacion:
+      name: Tiempo de verificación completa (seg)
+      description: Tras este tiempo con el estado estable se audita y corrige el semáforo (0 luces, 2+ luces o luz incorrecta). Debe ser mayor que tiempo_espera + verify_timeout.
+      default: 20
+      selector:
+        number:
+          min: 10
+          max: 180
+          step: 5
+          unit_of_measurement: s
+          mode: slider
+    verify_timeout:
+      name: Timeout wait_template (seg)
+      description: Máximo de espera por confirmación de cada switch tras turn_on/off.
+      default: 15
+      selector:
+        number:
+          min: 5
+          max: 30
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+    max_retries:
+      name: Reintentos máximos
+      description: Vueltas de corrección si tras wait_template el semáforo sigue desviado.
+      default: 4
+      selector:
+        number:
+          min: 1
+          max: 5
+          step: 1
+          mode: slider
+
+variables:
+  ent_rojo: !input semaforo_rojo
+  ent_amar: !input semaforo_amar
+  ent_verde: !input semaforo_verde
+  ent_state: !input state_plugin
+  t_retry: !input retry_time
+  t_out: !input verify_timeout
+  t_max: !input max_retries
+
+trigger:
+  # --- Aplicar cambio tras debounce corto ---
+- trigger: state
+  entity_id: !input state_plugin
+  to: Ocupado
+  for:
+    seconds: !input tiempo_espera
+  id: id_apply_ocup
+- trigger: state
+  entity_id: !input state_plugin
+  to: Libre
+  for:
+    seconds: !input tiempo_espera
+  id: id_apply_libre
+- trigger: state
+  entity_id: !input state_plugin
+  to:
+  - Sucia
+  - Aseo
+  for:
+    seconds: !input tiempo_espera
+  id: id_apply_sucia_aseo
+  # --- Verificación completa tras estado estable prolongado ---
+- trigger: state
+  entity_id: !input state_plugin
+  to: Ocupado
+  for:
+    seconds: !input tiempo_verificacion
+  id: id_verify_ocup
+- trigger: state
+  entity_id: !input state_plugin
+  to: Libre
+  for:
+    seconds: !input tiempo_verificacion
+  id: id_verify_libre
+- trigger: state
+  entity_id: !input state_plugin
+  to:
+  - Sucia
+  - Aseo
+  for:
+    seconds: !input tiempo_verificacion
+  id: id_verify_sucia_aseo
+
+action:
+- choose:
+  # --- Ocupado → rojo ON; amarillo y verde OFF ---
+  - conditions:
+    - condition: or
+      conditions:
+        - condition: trigger
+          id: id_apply_ocup
+        - condition: trigger
+          id: id_verify_ocup
+    - condition: state
+      entity_id: !input state_plugin
+      state: Ocupado
+    sequence:
+    - repeat:
+        while:
+          - condition: template
+            value_template: >-
+              {{ repeat.index <= t_max and (
+                is_state(ent_amar, 'on') or is_state(ent_verde, 'on') or not is_state(ent_rojo, 'on')
+              ) }}
+          - condition: state
+            entity_id: !input state_plugin
+            state: Ocupado
+        sequence:
+        - parallel:
+          - sequence:
+            - condition: state
+              entity_id: !input semaforo_amar
+              state: 'on'
+            - action: switch.turn_off
+              target:
+                entity_id: !input semaforo_amar
+            - wait_template: "{{ is_state(ent_amar, 'off') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+          - sequence:
+            - condition: state
+              entity_id: !input semaforo_verde
+              state: 'on'
+            - action: switch.turn_off
+              target:
+                entity_id: !input semaforo_verde
+            - wait_template: "{{ is_state(ent_verde, 'off') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+        - if:
+            - condition: state
+              entity_id: !input semaforo_rojo
+              state: 'off'
+          then:
+            - action: switch.turn_on
+              target:
+                entity_id: !input semaforo_rojo
+            - wait_template: "{{ is_state(ent_rojo, 'on') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+        - delay:
+            seconds: !input retry_time
+    alias: Plg_ semaforo - Ocupado
+
+  # --- Libre → verde ON; rojo y amarillo OFF ---
+  - conditions:
+    - condition: or
+      conditions:
+        - condition: trigger
+          id: id_apply_libre
+        - condition: trigger
+          id: id_verify_libre
+    - condition: state
+      entity_id: !input state_plugin
+      state: Libre
+    sequence:
+    - repeat:
+        while:
+          - condition: template
+            value_template: >-
+              {{ repeat.index <= t_max and (
+                is_state(ent_rojo, 'on') or is_state(ent_amar, 'on') or not is_state(ent_verde, 'on')
+              ) }}
+          - condition: state
+            entity_id: !input state_plugin
+            state: Libre
+        sequence:
+        - parallel:
+          - sequence:
+            - condition: state
+              entity_id: !input semaforo_rojo
+              state: 'on'
+            - action: switch.turn_off
+              target:
+                entity_id: !input semaforo_rojo
+            - wait_template: "{{ is_state(ent_rojo, 'off') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+          - sequence:
+            - condition: state
+              entity_id: !input semaforo_amar
+              state: 'on'
+            - action: switch.turn_off
+              target:
+                entity_id: !input semaforo_amar
+            - wait_template: "{{ is_state(ent_amar, 'off') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+        - if:
+            - condition: state
+              entity_id: !input semaforo_verde
+              state: 'off'
+          then:
+            - action: switch.turn_on
+              target:
+                entity_id: !input semaforo_verde
+            - wait_template: "{{ is_state(ent_verde, 'on') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+        - delay:
+            seconds: !input retry_time
+    alias: Plg_ semaforo - Libre
+
+  # --- Sucia o Aseo → amarillo ON; rojo y verde OFF ---
+  - conditions:
+    - condition: or
+      conditions:
+        - condition: trigger
+          id: id_apply_sucia_aseo
+        - condition: trigger
+          id: id_verify_sucia_aseo
+    - condition: or
+      conditions:
+        - condition: state
+          entity_id: !input state_plugin
+          state: Sucia
+        - condition: state
+          entity_id: !input state_plugin
+          state: Aseo
+    sequence:
+    - repeat:
+        while:
+          - condition: template
+            value_template: >-
+              {{ repeat.index <= t_max and (
+                is_state(ent_rojo, 'on') or is_state(ent_verde, 'on') or not is_state(ent_amar, 'on')
+              ) }}
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: !input state_plugin
+                state: Sucia
+              - condition: state
+                entity_id: !input state_plugin
+                state: Aseo
+        sequence:
+        - parallel:
+          - sequence:
+            - condition: state
+              entity_id: !input semaforo_rojo
+              state: 'on'
+            - action: switch.turn_off
+              target:
+                entity_id: !input semaforo_rojo
+            - wait_template: "{{ is_state(ent_rojo, 'off') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+          - sequence:
+            - condition: state
+              entity_id: !input semaforo_verde
+              state: 'on'
+            - action: switch.turn_off
+              target:
+                entity_id: !input semaforo_verde
+            - wait_template: "{{ is_state(ent_verde, 'off') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+        - if:
+            - condition: state
+              entity_id: !input semaforo_amar
+              state: 'off'
+          then:
+            - action: switch.turn_on
+              target:
+                entity_id: !input semaforo_amar
+            - wait_template: "{{ is_state(ent_amar, 'on') }}"
+              timeout: "{{ t_out }}"
+              continue_on_timeout: true
+        - delay:
+            seconds: !input retry_time
+    alias: Plg_ semaforo - Aseo/Sucia
+  default: []
+
+mode: queued
+max: 2
