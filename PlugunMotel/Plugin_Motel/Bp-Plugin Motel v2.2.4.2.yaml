@@ -1,0 +1,321 @@
+blueprint:
+  name: Bp-Plugin Motel v2.2.4.2
+  description: >
+    Habitaciones motel — respuesta rápida al cambiar estado (Aseo/Libre/Ocupado/Sucia) y apagado por tiempo.
+    Sin reintentos aquí: usar Bp-Plugin Ext Motel - Verify v1.0 para confirmación Z-Wave/Zigbee con wait_template.
+  domain: automation
+
+  input:
+    state_plugin:
+      name: Estado del Plugin
+      description: Auxiliar con estados Aseo, Libre, Ocupado, Sucia
+      selector:
+        entity:
+          domain: input_select
+
+    actuadores_luces_on:
+      name: Actuadores Luces On
+      description: Luces (switch) que se encienden/apagan según estado
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    actuadores_tomas_on:
+      name: Actuadores Tomas On
+      description: Tomas/enchufes (switch) que se encienden/apagan según estado
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    actuadores_off:
+      name: Actuadores Off
+      description: Switches que se apagan en Libre/Sucia
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    actuador_luz_serv:
+      name: Actuador Luz Servicio
+      description: Luz de servicio (se mantiene encendida en estado Sucia)
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    actuador_puert_gar:
+      name: Actuador Puerta Garaje
+      description: Actuador de puerta de garaje
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+    termostat:
+      name: Termostato
+      description: Termostato(s) de la habitación
+      default: []
+      selector:
+        entity:
+          domain: climate
+          multiple: true
+
+    target_temperature:
+      name: Temperatura Objetivo
+      description: Setpoint al pasar la habitación a Ocupado
+      default: 24
+      selector:
+        number:
+          min: 16
+          max: 30
+          unit_of_measurement: "°C"
+
+    delay_off:
+      name: Retardo para Apagar (min)
+      description: Tiempo con actuadores/termo encendidos en Libre o Sucia antes de apagar
+      default: "5"
+      selector:
+        select:
+          options:
+          - "5"
+          - "10"
+          - "15"
+          - "20"
+          - "30"
+
+trigger:
+- trigger: state
+  entity_id: !input state_plugin
+  to: Libre
+  id: id_a_libre
+- trigger: state
+  entity_id: !input state_plugin
+  to: Aseo
+  id: id_a_aseo
+- trigger: state
+  entity_id: !input state_plugin
+  to: Ocupado
+  id: id_a_ocupado
+- trigger: state
+  entity_id: !input state_plugin
+  to: Sucia
+  id: id_a_sucia
+- trigger: state
+  entity_id: !input actuadores_luces_on
+  to: "on"
+  for:
+    minutes: !input delay_off
+  id: id_apagar_por_tiempo
+- trigger: state
+  entity_id: !input actuadores_tomas_on
+  to: "on"
+  for:
+    minutes: !input delay_off
+  id: id_apagar_por_tiempo
+- trigger: state
+  entity_id: !input actuadores_off
+  to: "on"
+  for:
+    minutes: !input delay_off
+  id: id_apagar_por_tiempo
+- trigger: state
+  entity_id: !input termostat
+  to:
+  - cool
+  - heat
+  for:
+    minutes: !input delay_off
+  id: id_apagar_por_tiempo
+
+action:
+- choose:
+  - conditions:
+    - condition: trigger
+      id: id_a_libre
+    sequence:
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_luces_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_tomas_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_off
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuador_luz_serv
+    - if:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: !input termostat
+              state: "off"
+      then:
+        - action: climate.turn_off
+          target:
+            entity_id: !input termostat
+    alias: Estado Libre - apagar todo
+
+  - conditions:
+    - condition: trigger
+      id: id_a_aseo
+    sequence:
+    - action: switch.turn_on
+      target:
+        entity_id: !input actuadores_luces_on
+    - action: switch.turn_on
+      target:
+        entity_id: !input actuadores_tomas_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuador_luz_serv
+    - if:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: !input termostat
+              state: "off"
+      then:
+        - action: climate.turn_off
+          target:
+            entity_id: !input termostat
+    alias: Estado Aseo - encender actuadores
+
+  - conditions:
+    - condition: trigger
+      id: id_a_ocupado
+    sequence:
+    - action: switch.turn_on
+      target:
+        entity_id: !input actuador_puert_gar
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuador_luz_serv
+    - action: switch.turn_on
+      target:
+        entity_id: !input actuadores_luces_on
+    - action: switch.turn_on
+      target:
+        entity_id: !input actuadores_tomas_on
+    - if:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: !input termostat
+              state: cool
+      then:
+        - action: climate.set_temperature
+          target:
+            entity_id: !input termostat
+          data:
+            hvac_mode: cool
+            temperature: !input target_temperature
+    alias: Estado Ocupado - encender actuadores y termo
+
+  - conditions:
+    - condition: trigger
+      id: id_a_sucia
+    sequence:
+    - action: switch.turn_on
+      target:
+        entity_id: !input actuador_luz_serv
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_luces_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_tomas_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_off
+    - if:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: !input termostat
+              state: "off"
+      then:
+        - action: climate.turn_off
+          target:
+            entity_id: !input termostat
+    alias: Estado Sucia - apagar excepto LuzServ
+
+  - conditions:
+    - condition: trigger
+      id: id_apagar_por_tiempo
+    - condition: state
+      entity_id: !input state_plugin
+      state: Aseo
+    sequence:
+    - action: input_select.select_option
+      target:
+        entity_id: !input state_plugin
+      data:
+        option: Sucia
+    alias: Aseo - tras delay pasar a Sucia
+
+  - conditions:
+    - condition: trigger
+      id: id_apagar_por_tiempo
+    - condition: state
+      entity_id: !input state_plugin
+      state: Libre
+    sequence:
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_luces_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_tomas_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_off
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuador_luz_serv
+    - if:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: !input termostat
+              state: "off"
+      then:
+        - action: climate.turn_off
+          target:
+            entity_id: !input termostat
+    alias: Libre - apagar por tiempo
+
+  - conditions:
+    - condition: trigger
+      id: id_apagar_por_tiempo
+    - condition: state
+      entity_id: !input state_plugin
+      state: Sucia
+    sequence:
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_luces_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_tomas_on
+    - action: switch.turn_off
+      target:
+        entity_id: !input actuadores_off
+    - if:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: !input termostat
+              state: "off"
+      then:
+        - action: climate.turn_off
+          target:
+            entity_id: !input termostat
+    alias: Sucia - apagar por tiempo (excepto LuzServ)
+  default: []
+
+mode: queued
+max: 3
