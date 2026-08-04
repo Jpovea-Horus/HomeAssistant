@@ -1,86 +1,132 @@
-# Bp-Plugin Hotel versiones 1...
+# Bp-Plugin Hotel v1.3.4
 
 ## Descripción
-Esta automatización para Home Assistant está diseñada para gestionar la ocupación en una habitación, como en un entorno de hotel. Controla switches y termostatos en función de sensores de puerta y movimiento, permitiendo un manejo eficiente de los dispositivos según el estado de ocupación (libre, ocupado, etc.) y los modos configurados (automático o manual).
+
+Automatización (blueprint) para Home Assistant orientada a gestionar la ocupación de una habitación de hotel. Controla actuadores (`switch`) y termostatos (`climate`) según sensores de puerta y movimiento, según el estado de ocupación y el modo del plugin (`auto`, `manual`, `apagado`).
+
+Incluye el estado interno `librePuertaAb` para evitar transiciones erróneas a `libre` mientras la puerta permanece abierta.
 
 ## Requisitos
-Para que la automatización funcione correctamente, asegúrate de configurar los siguientes elementos en Home Assistant:
+
+Configura en Home Assistant los siguientes elementos **antes** de usar el blueprint.
 
 ### Input Select
-Los siguientes `input_select` deben tener las opciones exactas indicadas:
-- **state_plugin**: Opciones: `libre`, `ocupado`
-- **state_internal**: Opciones: `libre`, `ocupado`, `scan`, `puertAbierta`
-- **mode_plugin**: Opciones: `auto`, `manual`
+
+Las opciones deben coincidir **exactamente**:
+
+| Entidad (input del blueprint) | Opciones requeridas |
+| --- | --- |
+| **state_plugin** | `libre`, `ocupado` |
+| **action_plugin** (Estado Interno) | `libre`, `ocupado`, `scan`, `puertAbierta`, `librePuertaAb` |
+| **mode_plugin** | `auto`, `manual`, `apagado` |
 
 ### Input Boolean
-Los siguientes `input_boolean` deben estar configurados (valores `on`/`off`):
-- **ModoPlg**: Habilita/deshabilita el modo del plugin.
-- **ModoAct**: Activa/desactiva los actuadores al iniciar la ocupación.
-- **ModoThermo**: Habilita/deshabilita el control de termostatos al iniciar la ocupación.
-- **ModoPuertAb**: Habilita/deshabilita el apagado de aire acondicionado si la puerta está abierta por un tiempo prolongado.
-- **ModoSetPointOff**: Habilita/deshabilita el control de temperatura al apagar la ocupación.
 
-**Nota**: Si las opciones no están configuradas correctamente, la automatización puede no funcionar como se espera.
+Valores `on` / `off`:
+
+| Entidad (input del blueprint) | Función |
+| --- | --- |
+| **mode_actuadoresOn** | Habilita/deshabilita el encendido de actuadores al iniciar ocupación (solo modo `auto`) |
+| **mode_thermostat** | Habilita/deshabilita el control de termostatos al iniciar ocupación (solo modo `auto`) |
+| **mode_puertAb** | Habilita/deshabilita el apagado de AA si la puerta permanece abierta ≥ `delay_puertAb` (solo modo `auto`) |
+| **mode_Setpointoff** | Habilita/deshabilita SetPointOff al pasar a libre (solo modo `auto`) |
+
+> Si las opciones o entidades no están bien configuradas, la automatización puede no comportarse como se espera.
 
 ## Instalación
-1. Copia el contenido del archivo YAML proporcionado en tu carpeta de automatizaciones de Home Assistant (normalmente en `automations.yaml` o en una subcarpeta).
-2. Configura las entidades requeridas en Home Assistant (sensores, switches, termostatos, etc.).
-3. Asegúrate de que los `input_select` e `input_boolean` estén creados con las opciones indicadas.
-4. Reinicia Home Assistant o recarga las automatizaciones desde la interfaz.
+
+1. Copia el archivo YAML del blueprint (p. ej. `_Bp-Plugin Hotel v1.3.4 - SensorPuerta.yaml`) a la carpeta de blueprints de Home Assistant, normalmente:
+   - `config/blueprints/automation/<tu_usuario>/`
+2. En **Ajustes → Automatizaciones y escenas → Blueprints**, crea una automatización a partir del blueprint.
+3. Crea y selecciona las entidades requeridas (`input_select`, `input_boolean`, sensores, switches, climates).
+4. Guarda la automatización. Si hace falta, recarga automatizaciones o reinicia Home Assistant.
 
 ## Configuración
-La automatización utiliza las siguientes entradas configurables:
 
 ### Sensores
-- **Sensor de Puerta** (`door_sensor`): Sensores binarios que detectan la apertura/cierre de la puerta.
-- **Sensor de Movimiento** (`motion_sensor`): Sensores binarios que detectan movimiento para determinar la ocupación.
 
-### Actuadores
-- **Switches a Encender** (`target_switchesOn`): Lista de switches que se encenderán al iniciar la ocupación y se apagarán al pasar a estado libre.
-- **Switches a Apagar** (`target_switchesOff`): Lista de switches que se apagarán cuando el estado sea libre.
-- **Termostatos a Encender** (`target_climates`): Lista de termostatos que se configurarán según la ocupación.
+- **Sensor de Puerta** (`door_sensor`): `binary_sensor` (uno o varios) que detectan apertura/cierre.
+- **Sensor de Movimiento** (`motion_sensor`): `binary_sensor` (uno o varios) para ocupación.
 
-### Configuraciones de Termostato
-- **Temperatura SetPointOn** (`temperature_SetPointOn`): Temperatura a establecer cuando los termostatos se encienden (16–30 °C, por defecto 24 °C).
-- **Modo de Ventilador SetPointOn** (`fanMode_SetPointOn`): Modo de ventilador al iniciar ocupación (opciones: `Auto low`, `Low`, `Medium`, `High`).
-- **Temperatura SetPointOff** (`temperature_SetPointOff`): Temperatura a establecer al apagar ocupación si `mode_Setpointoff` está activo (16–30 °C, por defecto 27 °C).
-- **Modo de Ventilador SetPointOff** (`fanMode_SetPointOff`): Modo de ventilador al apagar ocupación (opciones: `Auto low`, `Low`, `Medium`, `High`).
+### Actuadores y climates
 
-### Retardos
-- **Retardo Apagar** (`delay_off`): Tiempo de espera antes de apagar equipos tras inactividad (1–60 minutos, por defecto 15 minutos).
-- **Retardo de Scan al SM** (`delay_scan`): Tiempo de espera para escanear si el sensor de movimiento está activo (1–60 minutos, por defecto 5 minutos).
-- **Retardo de Switches** (`delay_switch`): Tiempo de espera antes de apagar switches en estado libre (1–60 minutos, por defecto 10 minutos).
-- **Retardo para Apagar AA** (`delay_puertAb`): Tiempo de espera por puerta abierta antes de apagar el aire acondicionado (1–60 minutos, por defecto 5 minutos).
+- **Actuadores a Encender** (`target_actuadoresOn`): switches que se encienden al iniciar ocupación (solo modo `auto`) y se apagan al pasar a libre (`auto` / `manual`).
+- **Actuadores a Apagar** (`target_actuadoresOff`): switches que se apagan al pasar a libre (`auto` / `manual`).
+- **Termostatos** (`target_climates`): climates configurados según ocupación y modos.
+
+### Termostato
+
+- **Temperatura SetPointOn** (`temperature_SetPointOn`): 16–30 °C (por defecto `24`). Se aplica al iniciar ocupación si `mode_thermostat` está `on` y `mode_plugin` es `auto`.
+- **Modo de Ventilador SetPointOn** (`fanMode_SetPointOn`): `Auto low`, `Low`, `Medium`, `High` (por defecto `Auto low`).
+- **Temperatura SetPointOff** (`temperature_SetPointOff`): 16–30 °C (por defecto `27`). Al pasar a libre si `mode_Setpointoff` está `on` y `mode_plugin` es `auto`.
+- **Modo de Ventilador SetPointOff** (`fanMode_SetPointOff`): `Auto low`, `Low`, `Medium`, `High` (por defecto `Auto low`).
+
+### Retardos y reintentos
+
+| Input | Descripción | Valores / defecto |
+| --- | --- | --- |
+| **delay_off_sp** | Tiempo en `scan` antes de pasar a libre cuando la entrada fue por sensor de puerta (`libre` → `puertAbierta` → cierra → `scan`) | `600`, `900` (defecto), `1200`, `1800` (segundos) |
+| **delay_off_actuadores** | Tiempo en `scan` antes de pasar a libre cuando la entrada fue por movimiento o por encender actuadores (`libre` → `scan`) | `600`, `900` (defecto), `1200`, `1800`, `3600` (segundos) |
+| **delay_scan** | Tiempo en `scan` + evaluación del sensor de movimiento | `140`, `260` (defecto), `500`, `920` (segundos) |
+| **delay_puertAb** | Tiempo con puerta abierta (`puertAbierta`) antes de apagar AA | 1–3600 s (por defecto `300`) |
+| **retry_time** | Intervalo entre reintentos para switches (Z-Wave/Zigbee), consultando estado antes de reenviar orden | 1–10 s (por defecto `1`) |
+
+## Modos del plugin (`mode_plugin`)
+
+| Modo | Comportamiento |
+| --- | --- |
+| **auto** | Control total: encendido al iniciar y apagado/ajuste al finalizar. Soporta SetPointOff. Apagado de AA por puerta abierta prolongada si `mode_puertAb` está activo. |
+| **manual** | Solo apagado al finalizar (sin SetPointOff). No enciende nada al iniciar. |
+| **apagado** | Solo actualiza variables de estado (`state_plugin` / `action_plugin`). No acciona equipos. El respaldo de 1 min en `libre` tampoco actúa en este modo. |
 
 ## Funcionamiento
-La automatización utiliza varios desencadenantes (`triggers`) basados en los estados de los sensores de puerta, movimiento, switches y variables internas. Según el estado del plugin (`state_plugin`), el estado interno (`state_internal`) y el modo del plugin (`mode_plugin`), se ejecutan diferentes acciones, como:
 
-- **Encendido de dispositivos**: Cuando la habitación pasa de `libre` a `ocupado` (por apertura de puerta o detección de movimiento), se encienden los switches y termostatos si el modo automático está activo.
-- **Apagado de dispositivos**: Cuando la habitación pasa a `libre` (tras inactividad o puerta abierta por un tiempo prolongado), se apagan los switches y, opcionalmente, los termostatos, o se ajustan a una temperatura de apagado (`SetPointOff`).
-- **Gestión de puerta abierta**: Si la puerta permanece abierta por más del tiempo configurado (`delay_puertAb`) y `mode_puertAb` está activo, los termostatos se apagan.
-- **Modo manual/automático**: En modo manual, las acciones automáticas de encendido/apagado se desactivan, permitiendo control manual.
+La automatización opera en modo `queued` y reacciona a cambios de puerta, movimiento, actuadores y estados internos (`action_plugin`).
 
-## Escenarios Principales
-1. **Puerta abierta (`libre` → `puertAbierta`)**: Cambia el estado a `ocupado`, enciende switches y termostatos (si modo automático).
-2. **Detección de movimiento (`libre` → `scan`)**: Cambia el estado a `ocupado`, enciende switches y termostatos (si modo automático).
-3. **Switches encendidos manualmente**: Cambia el estado a `scan` y luego a `ocupado`.
-4. **Puerta cerrada**: Cambia de `puertAbierta` o `libre` a `scan` y verifica movimiento.
-5. **Inactividad prolongada**: Cambia a `libre`, apaga switches y ajusta/apaga termostatos según configuración.
-6. **Puerta abierta prolongada**: Apaga termostatos si `mode_puertAb` está activo.
+### Escenarios principales
+
+1. **Puerta abierta (`libre` → `puertAbierta`)**: pasa a ocupado; en modo `auto` puede encender actuadores y termostatos según flags.
+2. **Movimiento en libre (`libre` → `scan`)**: marca ocupación; en modo `auto` puede encender equipos según flags.
+3. **Actuadores encendidos manualmente**: `libre` → `scan` → `ocupado`.
+4. **Puerta cerrada**: desde `puertAbierta` (o flujos equivalentes) pasa a `scan` y evalúa movimiento.
+5. **Inactividad prolongada**: tras `delay_off_sp` o `delay_off_actuadores`, pasa a `libre`, apaga actuadores y apaga o ajusta climates según modo y `mode_Setpointoff`.
+6. **Puerta abierta prolongada**: si `mode_puertAb` está `on` y `mode_plugin` es `auto`, apaga AA tras `delay_puertAb`.
+7. **`librePuertaAb`**: si la puerta sigue abierta al “liberar”, evita un `libre` incorrecto; movimiento o actuador On solo actualizan estados a `puertAbierta` + `ocupado` (sin encender equipos mientras la puerta sigue abierta).
+
+### Optimizaciones (v1.3.3.x → v1.3.4)
+
+- Evita comandos redundantes a climates: solo apaga si hay alguno encendido; solo aplica SetPoint/Fan si hay alguno apagado.
+- Reintentos de switches consultando estado antes de reenviar orden.
+- Evalúa variables de modo antes de actuar; si no están anexadas, se trata como `off` por defecto.
+- Tres modos de plugin: `auto`, `manual`, `apagado`.
+
+## Historial breve
+
+| Versión | Cambio |
+| --- | --- |
+| **1.3.2.9** | Fix `librePuertaAb`: actuador On o movimiento en `librePuertaAb`+`libre` → `puertAbierta`+`ocupado` (solo estados). |
+| **1.3.3.0** | `delay_off_sp` (entrada por puerta) y `delay_off_actuadores` (entrada por SM o actuadores). |
+| **1.3.3.1** | Evita comandos redundantes en AA/termostatos. |
+| **1.3.3.1.2** | Reintentos para switches (Z-Wave/Zigbee). |
+| **1.3.3.1.3** | Evalúa variables de modo antes de accionar (`off` por defecto si no anexadas). |
+| **1.3.4** | `mode_plugin` con `auto` / `manual` / `apagado` y reglas de actuación por modo. |
 
 ## Notas
-- La automatización opera en modo `queued`, procesando los desencadenantes en orden.
-- Asegúrate de que las entidades seleccionadas (sensores, switches, termostatos) sean válidas y estén correctamente configuradas en Home Assistant.
-- Si necesitas soporte o encuentras errores, revisa los logs de Home Assistant o crea un issue en este repositorio.
+
+- Usa entidades válidas y disponibles en Home Assistant.
+- Revisa los logs de Home Assistant si algo no dispara o no apaga/enciende.
+- Archivo de referencia actual: `Version Actual/_Bp-Plugin Hotel v1.3.4 - SensorPuerta.yaml`.
 
 ## Licencia
-Este proyecto está licenciado bajo la [Licencia MIT](LICENSE). Siéntete libre de usarlo y modificarlo según tus necesidades.
+
+MIT. Puedes usar y modificar el blueprint según tus necesidades.
 
 ## Contribuciones
-¡Las contribuciones son bienvenidas! Si deseas mejorar este blueprint, por favor:
-1. Crea un fork del repositorio.
-2. Realiza tus cambios.
-3. Envía un pull request con una descripción clara de las mejoras.
+
+1. Haz fork del repositorio.
+2. Aplica tus cambios.
+3. Abre un pull request con una descripción clara.
 
 ## Contacto
-Para preguntas o soporte, crea un issue en el repositorio o contacta a través de [tu canal preferido, si aplica].
+
+Para soporte o errores, abre un issue en el repositorio.
