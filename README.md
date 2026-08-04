@@ -1,6 +1,3 @@
-Propuesta lista para GitHub: jerarquía clara, TOC, tablas y bloques que se leen bien en la web. Estoy en Ask mode; pégalo tú o cambia a Agent para que lo escriba en el archivo.
-
-```markdown
 # Blueprints de Ocupación — Aula & Hotel
 
 Automatizaciones (blueprints) para [Home Assistant](https://www.home-assistant.io/) que gestionan ocupación, actuadores (`switch`) y termostatos (`climate`) según sensores y el modo del plugin.
