@@ -84,7 +84,7 @@ blueprint:
           domain: input_select
     action_plugin:
       #Estado de la Ocupacíon
-      name: Estado Interno
+      name: Acciones Internas
       description: Input Select (Variable Auxiliar) para los estados internos (libre/ocupado/scan/puertAbierta/librePuertaAb). Debe tener estas opciones.
       selector:
         entity:
