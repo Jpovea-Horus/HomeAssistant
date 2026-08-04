@@ -1,0 +1,425 @@
+blueprint:
+  name: Bp-Plugin Aula v1.3.2.5 - motion_sensor
+  description: |
+    Automatización para gestionar ocupación en un Aula. Controla actuadores y termostatos según sensores de movimiento.
+    v1.3.2.5 motion_sensor:
+    - Modo Plugin con 3 estados: auto, manual, apagado.
+    - Comportamiento: SM ON => ocupado; SM OFF => scan inmediato; Fin scan (delay_off) => libre.
+    - Modo Auto: Control total (encendido/apagado) con soporte para SetPointOff al finalizar.
+    - Modo manual: Solo apagado al finalizar (sin SetPointOff). No enciende nada al iniciar.
+    - Modo apagado: Solo actualización de variables de estado, no acciona equipos.
+    - Si estado pasa a libre por UI: sincroniza accion a libre y aplica apagado/SetPointOff.
+    - Fix: apagados con listas aplanadas; helpers libre sin espacios; modos auto/manual/apagado.
+    - Corregido: El respaldo (backup) ya no apaga el clima si Modo SetPointOff está activo.
+    - Corregido: Si se apaga el aire manualmente estando ocupado, el movimiento no lo vuelve a encender hasta que el estado pase por libre.
+    - Opcional: ModoAct / ModoThermo / ModoSetPointOff. Si no se anexan en el plano, default = off (No).
+
+    Asegúrate de configurar:
+    Los input_select con las opciones exactas:
+    - state_plugin: 'libre', 'ocupado'
+    - action_plugin: 'libre', 'ocupado', 'scan'
+    - mode_plugin: 'auto', 'manual', 'apagado'
+
+    Los input_boolean son opcionales (on/off). Si no se anexan => off:
+    - ModoAct: Modo Actuadores On (default off)
+    - ModoThermo: Modo Thermostat (default off)
+    - ModoSetPointOff: Modo Set Point Off (default off)
+
+  domain: automation
+  input:
+    motion_sensor:
+      name: Sensor de Movimiento
+      description: Sensor que detecta movimiento para determinar ocupación (solo sensores)
+      selector:
+        entity:
+          domain:
+          - binary_sensor
+          multiple: true
+    target_actuadoresOn:
+      name: actuadores a Encender
+      description: Lista de Actuadores que se encenderán al iniciar (solo en Modo auto) y apagarán al pasar a libre según ocupación (auto/manual)
+      default: []
+      selector:
+        entity:
+          domain:
+          - switch
+          multiple: true
+    target_actuadoresOff:
+      name: actuadores a Apagar
+      description: Lista de actuadores que se apagarán cuando el estado sea libre (auto/manual)
+      default: []
+      selector:
+        entity:
+          domain:
+          - switch
+          multiple: true
+    target_climates:
+      name: Termostatos a Encender
+      description: Lista de termostatos que se configurarán según ocupación
+      default: []
+      selector:
+        entity:
+          domain:
+          - climate
+          multiple: true
+    state_plugin:
+      name: Estado del Plugin
+      description: Input Select (Variable Auxiliar) para el estado del plugin (libre/ocupado). Debe tener opciones 'libre' y 'ocupado'.
+      selector:
+        entity:
+          domain:
+          - input_select
+    action_plugin:
+      name: Estado Interno
+      description: Input Select (Variable Auxiliar) para los estados internos (libre/ocupado/scan). Debe tener estas opciones.
+      selector:
+        entity:
+          domain:
+          - input_select
+    mode_plugin:
+      name: Modo del Plugin
+      description: "auto: Control total | manual: Solo apagado al finalizar | apagado: Solo actualización de estados. Debe tener opciones 'auto', 'manual' y 'apagado'."
+      selector:
+        entity:
+          domain:
+          - input_select
+    mode_activation:
+      name: Modo de Activación Actuadores
+      description: "Opcional. Input Boolean habilita/deshabilita la activación de actuadores al iniciar ocupación (Modo auto). Si no se anexa => off."
+      default: []
+      selector:
+        entity:
+          domain:
+          - input_boolean
+    mode_thermostat:
+      name: Modo de Termostato
+      description: "Opcional. Input Boolean habilita/deshabilita el control del termostato al iniciar ocupación (Modo auto). Si no se anexa => off."
+      default: []
+      selector:
+        entity:
+          domain:
+          - input_boolean
+
+    temperature_SetPointOn:
+      name: Temperatura SetPointOn
+      description: Temperatura a establecer cuando los termostatos se encienden al iniciar ocupación si mode_thermostat == On y mode_plugin == auto
+      default: 24
+      selector:
+        number:
+          min: 16.0
+          max: 30.0
+          unit_of_measurement: °C
+          step: 1.0
+          mode: slider
+    fanMode_SetPointOn:
+      name: Modo de Ventilador SetPointOn
+      description: Modo de ventilador para los termostatos al iniciar ocupación
+      default: auto low
+      selector:
+        select:
+          options:
+          - auto low
+          - Low
+          - Medium
+          - High
+    mode_Setpointoff:
+      name: Modo de SetPointOff
+      description: "Opcional. Input Boolean habilita/deshabilita el SetPointOff al pasar a libre (Modo auto). Si no se anexa => off (apaga clima)."
+      default: []
+      selector:
+        entity:
+          domain:
+          - input_boolean
+
+    temperature_SetPointOff:
+      name: Temperatura SetPointOff
+      description: Temperatura a establecer cuando los termostatos pasan a libre si mode_Setpointoff == On y mode_plugin == auto
+      default: 27
+      selector:
+        number:
+          min: 16.0
+          max: 30.0
+          unit_of_measurement: °C
+          step: 1.0
+          mode: slider
+    fanMode_SetPointOff:
+      name: Modo de Ventilador SetPointOff
+      description: Modo de ventilador para los termostatos al pasar a libre si mode_Setpointoff == On y mode_plugin == auto
+      default: auto low
+      selector:
+        select:
+          options:
+          - auto low
+          - Low
+          - Medium
+          - High
+    delay_scan:
+      name: Retardo del Sensor Movimiento
+      description: (Legacy) En esta versión el scan es inmediato al SM OFF; el tiempo de scan usa delay_off
+      default: 900
+      selector:
+        number:
+          min: 0.0
+          max: 3600.0
+          unit_of_measurement: s
+          step: 1.0
+          mode: slider
+    delay_off:
+      name: Retardo para Apagar
+      description: Tiempo en estado scan antes de pasar a libre si no hay movimiento
+      default: 600
+      selector:
+        number:
+          min: 0.0
+          max: 3600.0
+          unit_of_measurement: s
+          step: 1.0
+          mode: slider
+    retry_time:
+      name: Tiempo de Reintento (seg)
+      description: Tiempo entre reintentos para asegurar que los switches cambien de estado (Z-Wave).
+      default: 1
+      selector:
+        number:
+          min: 1.0
+          max: 10.0
+          step: 1.0
+          unit_of_measurement: s
+          mode: slider
+  source_url: https://github.com/Jpovea-Horus/HomeAssistant/blob/main/PlugunAula/Plugin%20Aula%20v1-3-2-1%20-%20motion_sensor_.yaml
+variables:
+  target_climates: !input target_climates
+  target_actuadoresOn: !input target_actuadoresOn
+  target_actuadoresOff: !input target_actuadoresOff
+  mode_activation_var: !input mode_activation
+  mode_thermostat_var: !input mode_thermostat
+  mode_Setpointoff_var: !input mode_Setpointoff
+  state_plugin_var: !input state_plugin
+  retry_time: !input retry_time
+trigger:
+- trigger: state
+  entity_id: !input motion_sensor
+  to: 'on'
+  id: ID_ocupado
+- trigger: state
+  entity_id: !input motion_sensor
+  to: 'off'
+  id: ID_scan
+- trigger: state
+  entity_id: !input action_plugin
+  to: scan
+  for:
+    seconds: !input delay_off
+  id: ID_apagar
+- trigger: state
+  entity_id: !input state_plugin
+  to: libre
+  id: ID_libre_ui
+- trigger: state
+  entity_id: !input state_plugin
+  to: libre
+  for:
+    minutes: 1
+  id: ID_timer_respaldo
+action:
+- choose:
+  - conditions:
+    - condition: trigger
+      id: ID_timer_respaldo
+    - condition: state
+      entity_id: !input state_plugin
+      state: libre
+    sequence:
+    - condition: template
+      value_template: >
+        {{ expand(target_actuadoresOn, target_actuadoresOff) | selectattr('state', 'ne', 'off') | list | count > 0 or 
+           (not is_state(mode_Setpointoff_var, 'on') and expand(target_climates) | selectattr('state', 'ne', 'off') | list | count > 0) }}
+    - action: homeassistant.turn_off
+      target:
+        entity_id: "{{ target_actuadoresOn + target_actuadoresOff }}"
+    - if:
+        - condition: template
+          value_template: "{{ not is_state(mode_Setpointoff_var, 'on') }}"
+      then:
+        - action: climate.turn_off
+          target:
+            entity_id: !input target_climates
+    alias: Scena_Respaldo_timer_aula
+
+  - conditions:
+    - condition: trigger
+      id: ID_libre_ui
+    sequence:
+    - action: input_select.select_option
+      data:
+        option: libre
+      target:
+        entity_id: !input action_plugin
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: !input mode_plugin
+          state: auto
+        sequence:
+        - action: homeassistant.turn_off
+          target:
+            entity_id: "{{ target_actuadoresOn + target_actuadoresOff }}"
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: "{{ is_state(mode_Setpointoff_var, 'on') }}"
+            sequence:
+            - action: climate.set_temperature
+              data:
+                temperature: !input temperature_SetPointOff
+                hvac_mode: cool
+              target:
+                entity_id: !input target_climates
+            - action: climate.set_fan_mode
+              data:
+                fan_mode: !input fanMode_SetPointOff
+              target:
+                entity_id: !input target_climates
+          default:
+          - action: climate.turn_off
+            target:
+              entity_id: !input target_climates
+      - conditions:
+        - condition: state
+          entity_id: !input mode_plugin
+          state: manual
+        sequence:
+        - action: homeassistant.turn_off
+          target:
+            entity_id: "{{ target_actuadoresOn + target_actuadoresOff + target_climates }}"
+    alias: Scena_Estado_Libre_UI
+
+  - conditions:
+    - condition: trigger
+      id: ID_ocupado
+    sequence:
+    - variables:
+        prev_state: "{{ states(state_plugin_var) }}"
+    - action: input_select.select_option
+      data:
+        option: ocupado
+      target:
+        entity_id:
+        - !input action_plugin
+        - !input state_plugin
+    - if:
+      - condition: state
+        entity_id: !input mode_plugin
+        state: auto
+      - condition: template
+        value_template: "{{ prev_state != 'ocupado' }}"
+      then:
+      - if:
+        - condition: template
+          value_template: "{{ is_state(mode_activation_var, 'on') }}"
+        then:
+        - repeat:
+            while:
+            - condition: template
+              value_template: "{{ expand(target_actuadoresOn) | selectattr('state', 'eq', 'off') | list | count > 0 }}"
+            - condition: template
+              value_template: "{{ repeat.index <= 3 }}"
+            sequence:
+            - action: switch.turn_on
+              target:
+                entity_id: !input target_actuadoresOn
+            - delay:
+                seconds: !input retry_time
+      - if:
+        - condition: template
+          value_template: "{{ is_state(mode_thermostat_var, 'on') }}"
+        then:
+        - action: climate.set_temperature
+          data:
+            hvac_mode: cool
+            temperature: !input temperature_SetPointOn
+          target:
+            entity_id: !input target_climates
+        - action: climate.set_fan_mode
+          data:
+            fan_mode: !input fanMode_SetPointOn
+          target:
+            entity_id: !input target_climates
+    alias: Scena_SM_ON_ocupado
+
+  - conditions:
+    - condition: trigger
+      id: ID_ocupado
+      # Scena redundante para asegurar estados si ya estaba ocupado
+    - condition: state
+      entity_id: !input state_plugin
+      state: ocupado
+    sequence:
+    - action: input_select.select_option
+      data:
+        option: ocupado
+      target:
+        entity_id: !input action_plugin
+    alias: Scena_SM_ON_reocupado
+
+  - conditions:
+    - condition: trigger
+      id: ID_scan
+    sequence:
+    - action: input_select.select_option
+      data:
+        option: scan
+      target:
+        entity_id: !input action_plugin
+    alias: Scena_SM_OFF_scan
+
+  - conditions:
+    - condition: trigger
+      id: ID_apagar
+    sequence:
+    - action: input_select.select_option
+      data:
+        option: libre
+      target:
+        entity_id:
+        - !input action_plugin
+        - !input state_plugin
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: !input mode_plugin
+          state: auto
+        sequence:
+        - action: homeassistant.turn_off
+          target:
+            entity_id: "{{ target_actuadoresOn + target_actuadoresOff }}"
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: "{{ is_state(mode_Setpointoff_var, 'on') }}"
+            sequence:
+            - action: climate.set_temperature
+              data:
+                temperature: !input temperature_SetPointOff
+                hvac_mode: cool
+              target:
+                entity_id: !input target_climates
+            - action: climate.set_fan_mode
+              data:
+                fan_mode: !input fanMode_SetPointOff
+              target:
+                entity_id: !input target_climates
+          default:
+          - action: climate.turn_off
+            target:
+              entity_id: !input target_climates
+      - conditions:
+        - condition: state
+          entity_id: !input mode_plugin
+          state: manual
+        sequence:
+        - action: homeassistant.turn_off
+          target:
+            entity_id: "{{ target_actuadoresOn + target_actuadoresOff + target_climates }}"
+    alias: Scena_FinScan_Libre
+mode: queued
