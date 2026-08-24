@@ -1,0 +1,145 @@
+blueprint:
+  name: Bp-Plugin Ext Motel - LuzServ-SM v1.1
+  description: >
+    Extensión para Bp-Plugin Motel v2.2.4.2 — en Libre, luz de servicio encendida como máximo 20 min.
+    Tras el retardo configurado consulta el SM: sin movimiento apaga; con movimiento espera
+    hasta el tope de 20 min y entonces apaga.
+  domain: automation
+
+  input:
+    state_plugin:
+      name: Estado del Plugin
+      description: Mismo input_select del plugin principal (Aseo, Libre, Ocupado, Sucia)
+      selector:
+        entity:
+          domain: input_select
+
+    actuador_luz_serv:
+      name: Actuador Luz Servicio
+      description: Mismo switch de luz de servicio del plugin principal
+      default: []
+      selector:
+        entity:
+          domain: switch
+          multiple: true
+
+    motion_sensor:
+      name: Sensor de Movimiento (SM)
+      description: Sensor consultado al vencer el retardo (antes del tope de 20 min)
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+
+    delay_luz_serv:
+      name: Retardo consulta SM (min)
+      description: Tiempo encendida antes de consultar el SM (tope total fijo 20 min)
+      default: "10"
+      selector:
+        select:
+          options:
+          - "5"
+          - "10"
+          - "15"
+          - "20"
+          - "30"
+
+    retry_time:
+      name: Tiempo de Reintento (seg)
+      description: Tiempo entre reintentos al apagar el switch (Z-Wave/Zigbee)
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+          unit_of_measurement: s
+          mode: slider
+
+trigger:
+  # Consulta SM al vencer retardo configurado (≤ 20 min)
+  - trigger: state
+    entity_id: !input actuador_luz_serv
+    to: "on"
+    for:
+      minutes: !input delay_luz_serv
+    id: id_consulta_sm
+
+  # Tope máximo: 20 min encendida en Libre → apagar
+  - trigger: state
+    entity_id: !input actuador_luz_serv
+    to: "on"
+    for:  
+      minutes: 20
+    id: id_max_20min
+
+action:
+  - condition: state
+    entity_id: !input state_plugin
+    state: Libre
+
+  - choose:
+    # Tope 20 min → apagar si sigue encendida
+    - conditions:
+        - condition: trigger
+          id: id_max_20min
+      sequence:
+      - repeat:
+          while:
+            - condition: state
+              entity_id: !input actuador_luz_serv
+              state: "on"
+            - condition: state
+              entity_id: !input state_plugin
+              state: Libre
+            - condition: template
+              value_template: "{{ repeat.index <= 3 }}"
+          sequence:
+            - action: switch.turn_off
+              target:
+                entity_id: !input actuador_luz_serv
+            - delay:
+                seconds: !input retry_time
+      alias: Libre - tope 20 min apagar luz serv
+
+    # Consulta SM → sin movimiento apaga; con movimiento espera al tope de 20 min
+    - conditions:
+        - condition: trigger
+          id: id_consulta_sm
+      sequence:
+      - choose:
+        - conditions:
+            - condition: state
+              entity_id: !input actuador_luz_serv
+              state: "off"
+          sequence: []
+          alias: Libre - luz serv ya off
+
+        - conditions:
+            - condition: state
+              entity_id: !input motion_sensor
+              state: "off"
+              match: all
+          sequence:
+          - repeat:
+              while:
+                - condition: state
+                  entity_id: !input actuador_luz_serv
+                  state: "on"
+                - condition: state
+                  entity_id: !input state_plugin
+                  state: Libre
+                - condition: template
+                  value_template: "{{ repeat.index <= 3 }}"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: !input actuador_luz_serv
+                - delay:
+                    seconds: !input retry_time
+          alias: Libre - SM off, apagar luz serv
+
+        default: []
+      alias: Libre - consulta SM
+
+mode: restart
