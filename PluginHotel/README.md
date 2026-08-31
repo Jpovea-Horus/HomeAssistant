@@ -1,4 +1,4 @@
-# Bp-Plugin Hotel v1.3.4.2.1
+# Plugin Hotel v1.3.4.2.1
 
 ## Descripción
 
