@@ -1,0 +1,213 @@
+blueprint:
+  name: "Bp-Plugin Humo v1.1"
+  description: |
+    Automatización para controlar el activador de humo de una habitación de forma cíclica
+    cuando pasa a estado "Ocupado", sin mantener delays en memoria.
+
+    v1.1 — Mejoras:
+    - Usa un Timer (pasivo) en lugar de delay/repeat → menos CPU y RAM.
+    - Usa un Counter para contar disparos → sobrevive reinicios.
+    - Cancela el ciclo al salir de Ocupado.
+    - Recuperación al arrancar Home Assistant si la habitación sigue ocupada.
+
+    Requisitos del operario (helpers por habitación):
+    1) Timer con restore activado (Settings → Devices & Services → Helpers).
+    2) Counter (restore por defecto). Vincular ambos en el formulario del blueprint.
+
+  domain: automation
+  input:
+    selector_ocupacion:
+      name: Selector Plugin Motel
+      description: Selecciona el plugin (input_select) de la habitación.
+      selector:
+        entity:
+          filter:
+            - domain: input_select
+
+    switch_humo:
+      name: Selector CS_Humo
+      description: Contacto seco del disparador de humo (pulso interno ~5 s).
+      selector:
+        entity:
+          filter:
+            - domain: switch
+
+    timer_ciclo:
+      name: Timer del ciclo de humo
+      description: >
+        Timer helper de esta habitación. Debe tener "Restore" activado para
+        sobrevivir reinicios del controlador.
+      selector:
+        entity:
+          filter:
+            - domain: timer
+
+    counter_disparos:
+      name: Contador de disparos
+      description: Counter helper de esta habitación (lleva la cuenta de pulsos 1..N).
+      selector:
+        entity:
+          filter:
+            - domain: counter
+
+    tiempo_espera_inicial:
+      name: Disparo inicial (segundos)
+      description: Tiempo en Ocupado antes del primer disparo de humo.
+      default: 600
+      selector:
+        number:
+          min: 1
+          max: 3600
+          unit_of_measurement: "segundos"
+          mode: box
+
+    tiempo_intervalo_ciclo:
+      name: Intervalo entre encendidos (segundos)
+      description: Tiempo entre un disparo y el siguiente mientras siga Ocupado.
+      default: 600
+      selector:
+        number:
+          min: 5
+          max: 7200
+          unit_of_measurement: "segundos"
+          mode: box
+
+    max_disparos:
+      name: Máximo de disparos
+      description: Cantidad máxima de pulsos de humo por ocupación.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 20
+          unit_of_measurement: "veces"
+          mode: box
+
+variables:
+  entidad_ocupacion: !input selector_ocupacion
+  entidad_switch: !input switch_humo
+  entidad_timer: !input timer_ciclo
+  entidad_counter: !input counter_disparos
+  espera_inicial: !input tiempo_espera_inicial
+  intervalo: !input tiempo_intervalo_ciclo
+  max_disparos: !input max_disparos
+
+triggers:
+  # 1) Habitación ocupada el tiempo inicial → primer disparo
+  - trigger: state
+    entity_id: !input selector_ocupacion
+    to: "Ocupado"
+    for:
+      seconds: !input tiempo_espera_inicial
+    id: inicio
+
+  # 2) Timer terminó → siguiente disparo del ciclo
+  - trigger: event
+    event_type: timer.finished
+    id: ciclo
+
+  # 3) Dejó de estar Ocupado → limpiar ciclo
+  - trigger: state
+    entity_id: !input selector_ocupacion
+    from: "Ocupado"
+    id: fin
+
+  # 4) HA reinició → retomar si aplica
+  - trigger: homeassistant
+    event: start
+    id: arranque
+
+conditions: []
+
+actions:
+  - choose:
+      # --- Salida de Ocupado: cancelar y resetear ---
+      - conditions:
+          - condition: trigger
+            id: fin
+        sequence:
+          - action: timer.cancel
+            target:
+              entity_id: !input timer_ciclo
+          - action: counter.reset
+            target:
+              entity_id: !input counter_disparos
+
+      # --- Primer disparo tras espera inicial ---
+      - conditions:
+          - condition: trigger
+            id: inicio
+          - condition: state
+            entity_id: !input selector_ocupacion
+            state: "Ocupado"
+        sequence:
+          - action: timer.cancel
+            target:
+              entity_id: !input timer_ciclo
+          - action: counter.reset
+            target:
+              entity_id: !input counter_disparos
+          - action: switch.turn_on
+            target:
+              entity_id: !input switch_humo
+          - action: counter.increment
+            target:
+              entity_id: !input counter_disparos
+          - if:
+              - condition: template
+                value_template: "{{ states(entidad_counter) | int(0) < max_disparos }}"
+            then:
+              - action: timer.start
+                target:
+                  entity_id: !input timer_ciclo
+                data:
+                  duration: "{{ intervalo }}"
+
+      # --- Ciclo: timer finished ---
+      - conditions:
+          - condition: trigger
+            id: ciclo
+          - condition: template
+            value_template: "{{ trigger.event.data.entity_id == entidad_timer }}"
+          - condition: state
+            entity_id: !input selector_ocupacion
+            state: "Ocupado"
+          - condition: template
+            value_template: "{{ states(entidad_counter) | int(0) < max_disparos }}"
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id: !input switch_humo
+          - action: counter.increment
+            target:
+              entity_id: !input counter_disparos
+          - if:
+              - condition: template
+                value_template: "{{ states(entidad_counter) | int(0) < max_disparos }}"
+            then:
+              - action: timer.start
+                target:
+                  entity_id: !input timer_ciclo
+                data:
+                  duration: "{{ intervalo }}"
+
+      # --- Arranque HA: retomar solo si no hay timer activo ---
+      - conditions:
+          - condition: trigger
+            id: arranque
+          - condition: state
+            entity_id: !input selector_ocupacion
+            state: "Ocupado"
+          - condition: template
+            value_template: "{{ states(entidad_counter) | int(0) < max_disparos }}"
+          - condition: template
+            value_template: "{{ states(entidad_timer) != 'active' }}"
+        sequence:
+          - action: timer.start
+            target:
+              entity_id: !input timer_ciclo
+            data:
+              duration: "{{ espera_inicial if states(entidad_counter) | int(0) == 0 else intervalo }}"
+
+mode: queued
+max: 10
