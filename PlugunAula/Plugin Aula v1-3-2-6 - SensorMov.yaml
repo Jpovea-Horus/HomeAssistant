@@ -1,0 +1,458 @@
+blueprint:
+  name: Bp-Plugin Aula v1.3.2.6 - motion_sensor
+  description: |
+    Automatización para gestionar ocupación en un Aula. Controla actuadores y termostatos según sensores de movimiento (SM).
+
+    Comportamiento:
+    - SM ON => ocupado.
+    - Todos los SM OFF => scan inmediato (con varios SM, basta uno en on para seguir ocupado).
+    - Fin scan (delay_off) => libre (si algún SM sigue en on, vuelve a ocupado).
+    - Libre por UI (ocupado -> libre): sincroniza accion a libre y aplica apagado/SetPointOff.
+    - Respaldo 1 min en libre: reenvía apagado si quedó algo encendido.
+    - Si se apaga el aire manualmente estando ocupado, el movimiento no lo vuelve a encender hasta que el estado pase por libre.
+
+    Modos del Plugin (mode_plugin):
+    - auto: Control total (encendido/apagado) con soporte para SetPointOff al finalizar.
+    - manual: No enciende nada al iniciar. Solo apaga al finalizar (sin SetPointOff, siempre apaga clima).
+    - apagado: Solo actualiza variables de estado, no acciona equipos (incluye respaldo).
+
+    Cambios v1.3.2.6:
+    - Con varios SM, pasa a scan solo si ningún SM está en on (antes bastaba que uno pasara a off).
+    - Fin scan verifica que ningún SM esté en on antes de pasar a libre.
+    - Escenas Libre_UI y FinScan fusionadas en Scena_Apagar_a_libre (un solo bloque de apagado auto/manual).
+    - Libre por UI solo desde ocupado y sin duplicar el apagado del Fin scan.
+    - Respaldo 1 min no actúa en modo apagado; en manual ignora SetPointOff.
+    - input_boolean opcionales protegidos (si no se anexan => off, sin error de plantilla).
+    - Apagado de actuadores con reintentos; fan_mode solo en climas que lo soportan.
+    - Eliminada escena redundante SM_ON_reocupado (nunca se ejecutaba).
+    - Reintentos configurables (retry_attempts 0-2, default 0) en encendido/apagado de actuadores.
+    - Salida temprana si ya está ocupado (eventos SM repetidos no recorren escenas).
+    - climates_with_fan se calcula solo al aplicar SetPoint; eliminado input legacy delay_scan; cola max 8.
+
+    Asegúrate de configurar:
+    Los input_select con las opciones exactas:
+    - state_plugin: 'libre', 'ocupado'
+    - action_plugin: 'libre', 'ocupado', 'scan'
+    - mode_plugin: 'auto', 'manual', 'apagado'
+
+    Los input_boolean son opcionales (on/off). Si no se anexan => off:
+    - ModoAct: Modo Actuadores On (default off)
+    - ModoThermo: Modo Thermostat (default off)
+    - ModoSetPointOff: Modo Set Point Off (default off)
+
+  domain: automation
+  input:
+    motion_sensor:
+      name: Sensor de Movimiento
+      description: Sensor que detecta movimiento para determinar ocupación (solo sensores)
+      selector:
+        entity:
+          domain:
+          - binary_sensor
+          multiple: true
+    target_actuadoresOn:
+      name: actuadores a Encender
+      description: Lista de Actuadores que se encenderán al iniciar (solo en Modo auto) y apagarán al pasar a libre según ocupación (auto/manual)
+      default: []
+      selector:
+        entity:
+          domain:
+          - switch
+          multiple: true
+    target_actuadoresOff:
+      name: actuadores a Apagar
+      description: Lista de actuadores que se apagarán cuando el estado sea libre (auto/manual)
+      default: []
+      selector:
+        entity:
+          domain:
+          - switch
+          multiple: true
+    target_climates:
+      name: Termostatos a Encender
+      description: Lista de termostatos que se configurarán según ocupación
+      default: []
+      selector:
+        entity:
+          domain:
+          - climate
+          multiple: true
+    state_plugin:
+      name: Estado del Plugin
+      description: Input Select (Variable Auxiliar) para el estado del plugin (libre/ocupado). Debe tener opciones 'libre' y 'ocupado'.
+      selector:
+        entity:
+          domain:
+          - input_select
+    action_plugin:
+      name: Estado Interno
+      description: Input Select (Variable Auxiliar) para los estados internos (libre/ocupado/scan). Debe tener estas opciones.
+      selector:
+        entity:
+          domain:
+          - input_select
+    mode_plugin:
+      name: Modo del Plugin
+      description: "auto: Control total | manual: Solo apagado al finalizar | apagado: Solo actualización de estados. Debe tener opciones 'auto', 'manual' y 'apagado'."
+      selector:
+        entity:
+          domain:
+          - input_select
+    mode_activation:
+      name: Modo de Activación Actuadores
+      description: "Opcional. Input Boolean habilita/deshabilita la activación de actuadores al iniciar ocupación (Modo auto). Si no se anexa => off."
+      default: []
+      selector:
+        entity:
+          domain:
+          - input_boolean
+    mode_thermostat:
+      name: Modo de Termostato
+      description: "Opcional. Input Boolean habilita/deshabilita el control del termostato al iniciar ocupación (Modo auto). Si no se anexa => off."
+      default: []
+      selector:
+        entity:
+          domain:
+          - input_boolean
+
+    temperature_SetPointOn:
+      name: Temperatura SetPointOn
+      description: Temperatura a establecer cuando los termostatos se encienden al iniciar ocupación si mode_thermostat == On y mode_plugin == auto
+      default: 24
+      selector:
+        number:
+          min: 16.0
+          max: 30.0
+          unit_of_measurement: °C
+          step: 1.0
+          mode: slider
+    fanMode_SetPointOn:
+      name: Modo de Ventilador SetPointOn
+      description: Modo de ventilador para los termostatos al iniciar ocupación
+      default: auto low
+      selector:
+        select:
+          options:
+          - auto low
+          - Low
+          - Medium
+          - High
+    mode_Setpointoff:
+      name: Modo de SetPointOff
+      description: "Opcional. Input Boolean habilita/deshabilita el SetPointOff al pasar a libre (Modo auto). Si no se anexa => off (apaga clima)."
+      default: []
+      selector:
+        entity:
+          domain:
+          - input_boolean
+
+    temperature_SetPointOff:
+      name: Temperatura SetPointOff
+      description: Temperatura a establecer cuando los termostatos pasan a libre si mode_Setpointoff == On y mode_plugin == auto
+      default: 27
+      selector:
+        number:
+          min: 16.0
+          max: 30.0
+          unit_of_measurement: °C
+          step: 1.0
+          mode: slider
+    fanMode_SetPointOff:
+      name: Modo de Ventilador SetPointOff
+      description: Modo de ventilador para los termostatos al pasar a libre si mode_Setpointoff == On y mode_plugin == auto
+      default: auto low
+      selector:
+        select:
+          options:
+          - auto low
+          - Low
+          - Medium
+          - High
+    delay_off:
+      name: Retardo para Apagar
+      description: Al desactivarse el SM, el tiempo en estado scan antes de pasar a libre si no hay movimiento
+      default: 1200
+      selector:
+        number:
+          min: 0.0
+          max: 3600.0
+          unit_of_measurement: s
+          step: 1.0
+          mode: slider
+    retry_time:
+      name: Tiempo de Reintento (seg)
+      description: Tiempo entre reintentos para asegurar que los switches cambien de estado (Z-Wave).
+      default: 1
+      selector:
+        number:
+          min: 1.0
+          max: 10.0
+          step: 1.0
+          unit_of_measurement: s
+          mode: slider
+    retry_attempts:
+      name: Número de reintentos
+      description: "0 = Un solo intento (Fire & Forget) | 1 = Un intento + un reintento si falla | 2 = Un intento + dos reintentos. Default: 0."
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 2
+          step: 1
+          mode: slider
+  source_url: https://github.com/Jpovea-Horus/HomeAssistant/blob/main/PlugunAula/Plugin%20Aula%20v1-3-2-1%20-%20motion_sensor_.yaml
+variables:
+  motion_sensors: !input motion_sensor
+  target_climates: !input target_climates
+  target_actuadoresOn: !input target_actuadoresOn
+  target_actuadoresOff: !input target_actuadoresOff
+  mode_activation_var: !input mode_activation
+  mode_thermostat_var: !input mode_thermostat
+  mode_Setpointoff_var: !input mode_Setpointoff
+  mode_plugin_var: !input mode_plugin
+  state_plugin_var: !input state_plugin
+  retry_attempts: !input retry_attempts
+  mode_activation_on: "{% if mode_activation_var is string and mode_activation_var | length > 0 %}{{ is_state(mode_activation_var, 'on') }}{% else %}false{% endif %}"
+  mode_thermostat_on: "{% if mode_thermostat_var is string and mode_thermostat_var | length > 0 %}{{ is_state(mode_thermostat_var, 'on') }}{% else %}false{% endif %}"
+  mode_Setpointoff_on: "{% if mode_Setpointoff_var is string and mode_Setpointoff_var | length > 0 %}{{ is_state(mode_Setpointoff_var, 'on') }}{% else %}false{% endif %}"
+trigger:
+- trigger: state
+  entity_id: !input motion_sensor
+  to: 'on'
+  id: ID_ocupado
+- trigger: state
+  entity_id: !input motion_sensor
+  to: 'off'
+  id: ID_scan
+- trigger: state
+  entity_id: !input action_plugin
+  to: scan
+  for:
+    seconds: !input delay_off
+  id: ID_apagar
+- trigger: state
+  entity_id: !input state_plugin
+  from: ocupado
+  to: libre
+  id: ID_libre_ui
+- trigger: state
+  entity_id: !input state_plugin
+  to: libre
+  for:
+    minutes: 1
+  id: ID_timer_respaldo
+action:
+# Ambos selects en ocupado: se revisan los dos para no saltar una resincronización.
+- if:
+  - condition: trigger
+    id: ID_ocupado
+  - condition: state
+    entity_id: !input action_plugin
+    state: ocupado
+  - condition: state
+    entity_id: !input state_plugin
+    state: ocupado
+  then:
+  - stop: "Ya ocupado: evento SM sin cambios"
+- choose:
+  - conditions:
+    # Respaldo: no actúa en modo apagado. En manual siempre apaga clima; en auto respeta SetPointOff.
+    - condition: trigger
+      id: ID_timer_respaldo
+    - condition: state
+      entity_id: !input state_plugin
+      state: libre
+    - condition: not
+      conditions:
+      - condition: state
+        entity_id: !input mode_plugin
+        state: apagado
+    sequence:
+    - variables:
+        apagar_clima: "{{ is_state(mode_plugin_var, 'manual') or not (mode_Setpointoff_on | bool) }}"
+    - condition: template
+      value_template: >
+        {{ expand(target_actuadoresOn + target_actuadoresOff) | selectattr('state', 'eq', 'on') | list | count > 0 or
+           (apagar_clima | bool and expand(target_climates) | selectattr('state', 'ne', 'off') | list | count > 0) }}
+    - action: homeassistant.turn_off
+      continue_on_error: true
+      target:
+        entity_id: "{{ target_actuadoresOn + target_actuadoresOff }}"
+    - if:
+        - condition: template
+          value_template: "{{ apagar_clima | bool }}"
+      then:
+        - action: climate.turn_off
+          continue_on_error: true
+          target:
+            entity_id: !input target_climates
+    alias: Scena_Respaldo_timer_aula
+
+  - conditions:
+    - condition: trigger
+      id: ID_ocupado
+    sequence:
+    - variables:
+        prev_state: "{{ states(state_plugin_var) }}"
+    - action: input_select.select_option
+      data:
+        option: ocupado
+      target:
+        entity_id:
+        - !input action_plugin
+        - !input state_plugin
+    - if:
+      - condition: state
+        entity_id: !input mode_plugin
+        state: auto
+      - condition: template
+        value_template: "{{ prev_state != 'ocupado' }}"
+      then:
+      - if:
+        - condition: template
+          value_template: "{{ mode_activation_on | bool }}"
+        then:
+        - repeat:
+            while:
+            - condition: template
+              value_template: "{{ expand(target_actuadoresOn) | selectattr('state', 'eq', 'off') | list | count > 0 }}"
+            - condition: template
+              value_template: "{{ repeat.index <= (retry_attempts | int + 1) }}"
+            sequence:
+            - action: switch.turn_on
+              continue_on_error: true
+              target:
+                entity_id: !input target_actuadoresOn
+            - delay:
+                seconds: !input retry_time
+      - if:
+        - condition: template
+          value_template: "{{ mode_thermostat_on | bool }}"
+        then:
+        - variables:
+            climates_with_fan: "{% set ns = namespace(ids=[]) %}{% for c in expand(target_climates) %}{% if state_attr(c.entity_id, 'fan_modes') %}{% set ns.ids = ns.ids + [c.entity_id] %}{% endif %}{% endfor %}{{ ns.ids }}"
+        - action: climate.set_temperature
+          continue_on_error: true
+          data:
+            hvac_mode: cool
+            temperature: !input temperature_SetPointOn
+          target:
+            entity_id: !input target_climates
+        - if:
+          - condition: template
+            value_template: "{{ climates_with_fan | length > 0 }}"
+          then:
+          - action: climate.set_fan_mode
+            continue_on_error: true
+            data:
+              fan_mode: !input fanMode_SetPointOn
+            target:
+              entity_id: "{{ climates_with_fan }}"
+    alias: Scena_SM_ON_ocupado
+
+  - conditions:
+    # unavailable/unknown no bloquea el scan; solo un SM en on lo impide
+    - condition: trigger
+      id: ID_scan
+    - condition: template
+      value_template: "{{ expand(motion_sensors) | selectattr('state', 'eq', 'on') | list | count == 0 }}"
+    sequence:
+    - action: input_select.select_option
+      data:
+        option: scan
+      target:
+        entity_id: !input action_plugin
+    alias: Scena_SM_OFF_scan
+
+  - conditions:
+    # ID_libre_ui con action_plugin ya en libre lo generó el propio Fin scan: se ignora para no apagar dos veces.
+    - condition: or
+      conditions:
+      - condition: trigger
+        id: ID_apagar
+      - condition: and
+        conditions:
+        - condition: trigger
+          id: ID_libre_ui
+        - condition: not
+          conditions:
+          - condition: state
+            entity_id: !input action_plugin
+            state: libre
+    sequence:
+    - if:
+      - condition: trigger
+        id: ID_apagar
+      - condition: template
+        value_template: "{{ expand(motion_sensors) | selectattr('state', 'eq', 'on') | list | count > 0 }}"
+      then:
+      - action: input_select.select_option
+        data:
+          option: ocupado
+        target:
+          entity_id: !input action_plugin
+      - stop: "Fin scan cancelado: hay SM en on"
+    - action: input_select.select_option
+      data:
+        option: libre
+      target:
+        entity_id:
+        - !input action_plugin
+        - !input state_plugin
+    - if:
+      - condition: not
+        conditions:
+        - condition: state
+          entity_id: !input mode_plugin
+          state: apagado
+      then:
+      - repeat:
+          while:
+          - condition: template
+            value_template: "{{ expand(target_actuadoresOn + target_actuadoresOff) | selectattr('state', 'eq', 'on') | list | count > 0 }}"
+          - condition: template
+            value_template: "{{ repeat.index <= (retry_attempts | int + 1) }}"
+          sequence:
+          - action: homeassistant.turn_off
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_actuadoresOn + target_actuadoresOff }}"
+          - delay:
+              seconds: !input retry_time
+      - choose:
+        # SetPointOff solo en auto; en manual siempre apaga clima
+        - conditions:
+          - condition: state
+            entity_id: !input mode_plugin
+            state: auto
+          - condition: template
+            value_template: "{{ mode_Setpointoff_on | bool }}"
+          sequence:
+          - variables:
+              climates_with_fan: "{% set ns = namespace(ids=[]) %}{% for c in expand(target_climates) %}{% if state_attr(c.entity_id, 'fan_modes') %}{% set ns.ids = ns.ids + [c.entity_id] %}{% endif %}{% endfor %}{{ ns.ids }}"
+          - action: climate.set_temperature
+            continue_on_error: true
+            data:
+              temperature: !input temperature_SetPointOff
+              hvac_mode: cool
+            target:
+              entity_id: !input target_climates
+          - if:
+            - condition: template
+              value_template: "{{ climates_with_fan | length > 0 }}"
+            then:
+            - action: climate.set_fan_mode
+              continue_on_error: true
+              data:
+                fan_mode: !input fanMode_SetPointOff
+              target:
+                entity_id: "{{ climates_with_fan }}"
+        default:
+        - action: climate.turn_off
+          continue_on_error: true
+          target:
+            entity_id: !input target_climates
+    alias: Scena_Apagar_a_libre
+mode: queued
+max: 5
+   
