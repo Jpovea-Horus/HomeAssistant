@@ -4,8 +4,8 @@ Automatizaciones (blueprints) para [Home Assistant](https://www.home-assistant.i
 
 | Plugin | Versión | Archivo | Sensores |
 |:---|:---|:---|:---|
-| **Aula** | `v1.3.2.4` | [`Plugin Aula v1-3-2-4 - motion_sensor.yaml`](../Code%20BluePrint%20-%20Aula/Version%20Actual/Plugin%20Aula%20v1-3-2-4%20-%20motion_sensor.yaml) | Movimiento |
-| **Hotel** | `v1.3.4` | [`_Bp-Plugin Hotel v1.3.4 - SensorPuerta.yaml`](Version%20Actual/_Bp-Plugin%20Hotel%20v1.3.4%20-%20SensorPuerta.yaml) | Puerta + movimiento |
+| **Aula** | `v1.3.2.6.1` | [`Plugin Aula v1-3-2-6_1 - SensorMov.yaml`](Code%20BluePrint%20-%20Aula/Version%20Actual/Plugin%20Aula%20v1-3-2-6_1%20-%20SensorMov.yaml) | Movimiento |
+| **Hotel** | `v1.3.4.2.5_1` | [`Plugin Hotel v1-3-4-2-5_1 - SensorMov.yaml`](Code%20BluePrint%20-%20Hotel/Version%20Actual/Plugin%20Hotel%20v1-3-4-2-5_1%20-%20SensorMov.yaml) | Puerta + movimiento |
 
 > **Idea rápida:** Aula es el flujo simple (solo movimiento). Hotel añade puerta, `librePuertaAb` y delays diferenciados.
 
@@ -28,7 +28,7 @@ Automatizaciones (blueprints) para [Home Assistant](https://www.home-assistant.i
 
 ## Descripción
 
-### Aula (`v1.3.2.4`)
+### Aula (`v1.3.2.6.1`)
 
 Gestiona ocupación en un aula con **sensor de movimiento**. Controla switches y climates según:
 
@@ -37,7 +37,7 @@ Gestiona ocupación en un aula con **sensor de movimiento**. Controla switches y
 
 Ideal para espacios con ocupación variable **sin** control de puerta.
 
-### Hotel (`v1.3.4`)
+### Hotel (`v1.3.4.2.5_1`)
 
 Gestiona ocupación en habitación de hotel con **puerta + movimiento**. Añade:
 
@@ -50,7 +50,7 @@ Gestiona ocupación en habitación de hotel con **puerta + movimiento**. Añade:
 
 ## Requisitos
 
-Configura estas entidades **antes** de crear la automatización. Las opciones deben coincidir **exactamente**.
+Configura estas entidades **antes** de crear la automatización. Las opciones deben coincidir **exactamente** en **Minusculas**.
 
 ### Input Select
 
@@ -185,18 +185,22 @@ En **Aula**, el tiempo de liberación es un único `delay_off` (default `600` s)
 
 | Versión | Cambio |
 |:---|:---|
-| **1.3.2.9** | Fix `librePuertaAb`: actuador On o SM → `puertAbierta` + `ocupado` (solo estados). Escenas: `Scena_SW_librePuertaAb_a_puertAb_ocup`, `Scena_SMov_librePuertaAb_a_puertAb_ocup`. |
-| **1.3.3.0** | `delay_off_sp` (puerta) y `delay_off_actuadores` (SM / actuadores). |
-| **1.3.3.1** | Evita comandos redundantes en AA/termostatos. |
-| **1.3.3.1.2** | Reintentos de switches consultando estado. |
-| **1.3.3.1.3** | Evalúa flags de modo; default `off` si no anexados. |
+| **1.3.4.2.5** | Al cambiar `mode_plugin` en `libre` y puerta cerrada, fuerza scan (ocupado -> scan). |
+| **1.3.4.2.4** | Limpieza de variables, unificación de control de ventilador, cola máxima de 8, debounce en sensor de puerta, reintentos 0-2. Early-exit para movimiento/switches si ya está en `ocupado` (solo la puerta cambia estado). |
+| **1.3.4.2.3** | Movimiento en `librePuertaAb` → AA `SetPointOn` sin encender luces. |
 | **1.3.4** | `mode_plugin`: `auto` / `manual` / `apagado`. |
+| **1.3.3.1.3** | Evalúa flags de modo; default `off` si no anexados. |
+| **1.3.3.1.2** | Reintentos de switches consultando estado. |
+| **1.3.3.1** | Evita comandos redundantes en AA/termostatos. |
+| **1.3.3.0** | `delay_off_sp` (puerta) y `delay_off_actuadores` (SM / actuadores). |
+| **1.3.2.9** | Fix `librePuertaAb`: actuador On o SM → `puertAbierta` + `ocupado` (solo estados). |
 
 ### Aula
 
 | Versión | Cambio |
 |:---|:---|
-| **1.3.2.4** | Modos `auto` / `manual` / `apagado`. SM OFF → `scan` inmediato; liberación con `delay_off`. Fix: no reencender AA tras apagado manual en ocupado; respaldo respeta SetPointOff; listas aplanadas. |
+| **1.3.2.6** | Al cambiar `mode_plugin` fuerza scan (si no hay movimiento). Fix: apagados con listas aplanadas. Corregido: respaldo no apaga clima si `Modo SetPointOff` está activo. Corregido: si se apaga el aire manualmente, el movimiento no lo enciende hasta pasar por libre. |
+| **1.3.2.4** | Modos `auto` / `manual` / `apagado`. SM OFF → `scan` inmediato; liberación con `delay_off`. |
 
 ---
 
